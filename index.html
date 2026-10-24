@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="copyright" content="© Lexia. Tous droits réservés.">
+<title>Classificateur de risque IA · Lexia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<style>
+:root{
+  --navy:#13294B; --steel:#3B6E99; --steel-2:#7FA0BF; --ice:#E7EDF3; --mist:#F4F7FA;
+  --line:#D6DEE7; --gray:#5B6573; --ink:#2A3340; --alert:#8E2B2B; --alert-bg:#F8EFEF;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff}
+body{color:var(--ink);font:400 16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--serif);color:var(--navy);line-height:1.25;margin:0}
+a{color:var(--steel)}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+
+/* Cadre d'impression : l'en-tête et le pied se répètent sur chaque page imprimée */
+.frame,.frame>tbody,.frame>tbody>tr,.frame>tbody>tr>td{display:block;width:100%}
+.pf-head,.pf-foot{display:none}
+
+/* En-tête écran */
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 0 12px;border-bottom:1px solid var(--line)}
+.topbar img{width:34px;height:34px;border-radius:4px;flex:none}
+.brand{font-weight:600;color:var(--navy);font-size:.95rem;line-height:1.25;background:none;border:0;padding:0;text-align:left;font-family:inherit;cursor:pointer}
+.brand:hover{text-decoration:underline}
+.brand:focus-visible{outline:3px solid var(--steel-2);outline-offset:3px}
+.confirm{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;background:var(--mist);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin-top:14px}
+.confirm p{margin:0;font-weight:600;color:var(--navy)}
+.brand small{display:block;color:var(--gray);font-weight:400;font-size:.8rem}
+.meta{margin-left:auto;text-align:right;font-size:.8rem;color:var(--gray);line-height:1.35}
+.meta strong{color:var(--navy);font-weight:600}
+.progress{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:12px 0 0}
+.progress span{height:5px;background:var(--ice);border-radius:3px;transition:background .3s}
+.progress span.done{background:var(--steel)}
+.progress span.now{background:var(--navy)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+/* Titre d'étape */
+.stephead{padding:34px 0 8px;text-align:center}
+.stephead .count{font-size:.85rem;color:var(--steel);font-weight:600;margin:0 0 6px}
+.stephead h1{font-size:clamp(1.6rem,3.4vw,2.1rem);font-weight:700;max-width:28ch;margin:0 auto}
+.stephead .lede{color:var(--gray);max-width:68ch;margin:12px auto 0}
+.stephead .src{font-size:.85rem;color:var(--gray);margin:8px 0 0}
+
+/* Questions : annotation d'article en marge, comme un code annoté */
+.q{display:grid;grid-template-columns:132px 1fr;gap:22px;padding:22px 0;border-top:1px solid var(--line)}
+.q:first-of-type{border-top:0}
+.q-ref{font-size:.8rem;color:var(--steel);font-weight:600;text-align:right;padding:3px 14px 0 0;border-right:2px solid var(--ice);line-height:1.35}
+.q-body{min-width:0;max-width:66ch}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend,.q-label{display:block;font-weight:600;color:var(--navy);padding:0;margin:0 0 6px;font-size:1rem;line-height:1.45}
+.q-help{color:var(--gray);font-size:.88rem;margin:0 0 12px}
+.q-err{display:none;color:var(--alert);font-size:.86rem;font-weight:500;margin:10px 0 0}
+.q.invalid .q-err{display:block}
+.q.invalid .q-ref{border-right-color:var(--alert)}
+.grp{font-size:1.1rem;padding:26px 0 4px;border-top:1px solid var(--line)}
+@media (max-width:640px){
+  .q{grid-template-columns:1fr;gap:6px}
+  .q-ref{text-align:left;border:0;padding:0}
+}
+
+/* Choix segmentés Oui / Non / Incertain */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}
+.seg label{position:relative;display:block}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;padding:9px 20px;font-size:.93rem;color:var(--ink);border-right:1px solid var(--line);cursor:pointer;user-select:none}
+.seg label:last-child span{border-right:0}
+.seg label:hover span{background:var(--mist)}
+.seg input:checked+span{background:var(--navy);color:#fff}
+.seg input:focus-visible+span{outline:3px solid var(--steel-2);outline-offset:-3px}
+
+/* Options en liste */
+.opt{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border:1px solid var(--line);border-radius:6px;margin:0 0 7px;cursor:pointer;background:#fff}
+.opt:hover{border-color:var(--steel-2)}
+.opt input{margin:3px 0 0;width:18px;height:18px;flex:none;accent-color:var(--navy);cursor:pointer}
+.opt input:focus-visible{outline:3px solid var(--steel-2);outline-offset:2px}
+.opt:has(input:checked){border-color:var(--steel);background:var(--mist)}
+.opt .ot{font-size:.94rem;line-height:1.45}
+.opt .oref{display:block;font-size:.78rem;color:var(--steel);font-weight:600;margin-top:2px}
+.opt.none{border-style:dashed}
+
+/* Champs texte */
+.field{width:100%;font:inherit;color:var(--ink);padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.field:focus{outline:3px solid var(--steel-2);outline-offset:0;border-color:var(--steel)}
+textarea.field{min-height:96px;resize:vertical}
+.opt-tag{font-weight:400;color:var(--gray);font-size:.85rem}
+
+/* Encadrés */
+.note{background:var(--mist);border-left:3px solid var(--steel);padding:13px 16px;margin:18px 0;font-size:.92rem;border-radius:0 6px 6px 0;max-width:72ch}
+.note.warn{border-left-color:var(--alert);background:var(--alert-bg)}
+.note p{margin:0}
+.note p+p{margin-top:8px}
+
+/* Navigation */
+.nav{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:30px 0 6px;flex-wrap:wrap}
+.nav .right{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.btn{font:600 .95rem/1.2 var(--sans);padding:12px 20px;border-radius:6px;border:1px solid var(--navy);cursor:pointer;text-decoration:none;display:inline-block}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:#0d1f3a}
+.btn-ghost{background:#fff;color:var(--navy)}
+.btn-ghost:hover{background:var(--mist)}
+.btn-quiet{background:none;border-color:transparent;color:var(--gray);padding-left:0}
+.btn:focus-visible{outline:3px solid var(--steel-2);outline-offset:2px}
+
+/* Accueil */
+.intro-facts{margin:26px 0 8px;border-top:1px solid var(--line)}
+.intro-facts div{display:grid;grid-template-columns:132px 1fr;gap:22px;padding:12px 0;border-bottom:1px solid var(--line)}
+.intro-facts dt{font-size:.8rem;color:var(--steel);font-weight:600;text-align:right;padding:2px 14px 0 0;border-right:2px solid var(--ice)}
+.intro-facts dd{margin:0;max-width:62ch}
+@media (max-width:640px){.intro-facts div{grid-template-columns:1fr;gap:2px}.intro-facts dt{text-align:left;border:0;padding:0}}
+
+/* Résultat */
+.verdict{text-align:center;padding:26px 0 30px;border-bottom:1px solid var(--line)}
+.verdict .kick{font-size:.85rem;color:var(--steel);font-weight:600;margin:0 0 6px}
+.verdict h2{font-size:clamp(1.5rem,3vw,1.95rem)}
+.verdict h2.alert{color:var(--alert)}
+.verdict .vp{margin:12px auto 0;max-width:64ch}
+.prov{display:inline-block;margin-top:12px;font-size:.82rem;font-weight:600;color:var(--alert);background:var(--alert-bg);padding:4px 10px;border-radius:4px}
+.vis{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;max-width:760px;margin:26px auto 0}
+.vis figure{margin:0}
+.vis figcaption{font-size:.8rem;color:var(--gray);margin-top:8px}
+.vis svg{width:100%;height:auto;display:block}
+.pyr-svg{max-width:340px;margin:0 auto}
+.gauge-svg{max-width:300px;margin:0 auto}
+@media (max-width:680px){.vis{grid-template-columns:1fr;gap:26px}}
+.oos{display:inline-block;margin-top:10px;padding:6px 12px;border:1px dashed var(--steel);color:var(--navy);font-size:.85rem;font-weight:600;border-radius:4px}
+details.calc{max-width:520px;margin:18px auto 0;text-align:left;font-size:.88rem}
+details.calc summary{cursor:pointer;color:var(--steel);font-weight:600;text-align:center}
+details.calc table{width:100%;border-collapse:collapse;margin-top:8px}
+details.calc td{padding:5px 4px;border-bottom:1px solid var(--line)}
+details.calc td:last-child{text-align:right;white-space:nowrap;font-weight:600;color:var(--navy)}
+details.calc p{color:var(--gray);font-size:.8rem;margin:8px 0 0}
+.potential{margin:10px auto 0;font-size:.88rem;color:var(--alert);font-weight:600}
+.sec{padding:28px 0 6px}
+.sec>h2{font-size:1.35rem;margin-bottom:12px;text-align:center}
+.sec>p.sub{color:var(--gray);margin:-4px auto 14px;font-size:.92rem;max-width:68ch;text-align:center}
+.reasons{list-style:none;margin:0;padding:0}
+.reasons li{display:grid;grid-template-columns:132px 1fr;gap:22px;padding:10px 0;border-top:1px solid var(--line)}
+.reasons li .r{font-size:.8rem;color:var(--steel);font-weight:600;text-align:right;padding:2px 14px 0 0;border-right:2px solid var(--ice)}
+@media (max-width:640px){.reasons li{grid-template-columns:1fr;gap:2px}.reasons li .r{text-align:left;border:0;padding:0}}
+.roles{display:flex;flex-wrap:wrap;gap:8px}
+.roles span{border:1px solid var(--steel);color:var(--navy);padding:5px 12px;border-radius:4px;font-size:.88rem;font-weight:500}
+
+.hz{margin:18px 0 0}
+.hz h3{font-family:var(--sans);font-size:.95rem;font-weight:600;color:var(--navy);padding:10px 0 6px;border-bottom:2px solid var(--navy);display:flex;justify-content:space-between;gap:12px}
+.act .num{font-weight:700;color:var(--navy);margin-right:6px}
+.hz h3 span{font-weight:400;color:var(--gray);font-size:.85rem}
+.act{display:grid;grid-template-columns:22px 1fr auto;gap:12px;padding:13px 0;border-bottom:1px solid var(--line);break-inside:avoid}
+.act input{width:17px;height:17px;margin:3px 0 0;accent-color:var(--navy)}
+.act .at{font-weight:600;color:var(--navy);font-size:.95rem}
+.act .ad{font-size:.9rem;color:var(--ink);margin-top:3px;max-width:64ch}
+.act .ar{font-size:.78rem;color:var(--steel);font-weight:600;white-space:nowrap;padding-top:3px}
+@media (max-width:640px){.act{grid-template-columns:22px 1fr}.act .ar{grid-column:2;padding:0}}
+
+table.dl{width:100%;border-collapse:collapse;font-size:.9rem}
+table.dl th,table.dl td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.dl th{font-weight:600;color:var(--navy);border-bottom:2px solid var(--navy)}
+table.dl td:first-child{white-space:nowrap;font-weight:600;color:var(--navy);width:1%}
+table.dl tr.rel td{background:var(--mist)}
+table.dl tr.rel td:last-child::after{content:"  Concerne votre système";color:var(--steel);font-weight:600;font-size:.78rem;white-space:nowrap}
+.tblwrap{overflow-x:auto}
+
+details.recap{margin-top:8px;border-top:1px solid var(--line)}
+details.recap summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(--navy)}
+.recap dl{margin:0 0 10px}
+.recap dt{font-size:.86rem;color:var(--gray);margin-top:10px}
+.recap dd{margin:2px 0 0;font-size:.92rem}
+.recap h4{font-size:.9rem;color:var(--steel);margin:18px 0 0}
+
+/* Pied de page */
+.foot{margin-top:44px;padding:18px 0 30px;border-top:1px solid var(--line);font-size:.78rem;color:var(--gray);line-height:1.5}
+.foot p{margin:0 0 6px;max-width:90ch}
+.foot .legal{color:var(--navy);font-weight:600}
+
+[hidden]{display:none!important}
+.pp{display:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Impression / PDF */
+.pf-bar{display:flex;align-items:center;gap:10px;padding:0 0 8px;border-bottom:1px solid var(--line);margin-bottom:10px;font-size:9pt;color:var(--gray)}
+.pf-bar img{width:26px;height:26px;border-radius:3px}
+.pf-bar b{color:var(--navy)}
+.pf-bar .d{margin-left:auto}
+.pf-note{border-top:1px solid var(--line);padding-top:6px;margin-top:10px;font-size:7.5pt;color:var(--gray);line-height:1.4}
+@media print{
+  @page{size:A4;margin:14mm 16mm}
+  body{font-size:10pt;line-height:1.45}
+  .wrap{max-width:none;padding:0}
+  .frame{display:table;width:100%;border-collapse:collapse}
+  .frame>tbody{display:table-row-group}
+  .frame>tbody>tr,.frame>thead>tr,.frame>tfoot>tr{display:table-row}
+  .frame>tbody>tr>td,.frame>thead>tr>td,.frame>tfoot>tr>td{display:table-cell}
+  .pf-head{display:table-header-group}
+  .pf-foot{display:table-footer-group}
+  .no-print{display:none!important}
+  .verdict{padding-top:6px;break-inside:avoid}
+  .sec{break-inside:auto}
+  .sec>h2{break-after:avoid}
+  .hz h3{break-after:avoid}
+  .note{break-inside:avoid}
+  table.dl tr{break-inside:avoid}
+  details.recap summary{list-style:none}
+  details.recap summary::-webkit-details-marker{display:none}
+  a{color:var(--ink);text-decoration:none}
+  body.on-result .wrap{display:none!important}
+  body.on-result .pp{display:block!important}
+  .pp h1{font-family:var(--serif);font-size:18pt;color:var(--navy);text-align:center;margin:3mm 0 1mm}
+  .pp-sub{text-align:center;color:var(--gray);font-size:9.5pt;margin:0 0 6mm}
+  .pp-meta{margin:0 0 7mm;border-top:.6pt solid var(--line)}
+  .pp-meta div{display:grid;grid-template-columns:40mm 1fr;gap:4mm;padding:2.4mm 0;border-bottom:.6pt solid var(--line);break-inside:avoid}
+  .pp-meta dt{font-size:8pt;color:var(--steel);font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding-top:.6mm}
+  .pp-meta dd{margin:0;font-size:10pt;color:var(--ink)}
+  .pp-meta dd.pp-class{font-weight:700;color:var(--navy);font-size:11pt}
+  .pp-meta dd.pp-class.alert{color:var(--alert)}
+  .pp h2{font-family:var(--serif);font-size:13pt;color:var(--navy);text-align:center;margin:0 0 3mm}
+  .pp-list{margin:0;padding-left:9mm}
+  .pp-list li{break-inside:avoid;padding:2.2mm 0;border-bottom:.6pt solid var(--line);font-size:10pt}
+  .pp-list li::marker{font-weight:700;color:var(--navy)}
+  .pp-list .t{font-weight:700;color:var(--navy);margin:0}
+  .pp-list .d{margin:.8mm 0 0;color:var(--ink)}
+  .pp-list .m{margin:.8mm 0 0;font-size:8.5pt;color:var(--steel);font-weight:600}
+  .pp-disc{font-size:8.5pt;color:var(--gray);font-style:italic;margin-top:5mm}
+}
+</style>
+</head>
+<body>
+<table class="frame">
+  <thead class="pf-head"><tr><td>
+    <div class="pf-bar"><img src="data:image/png;base64,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" alt="Lexia"><span><b>Lexia</b> · Plan d’action · Règlement (UE) 2024/1689</span><span class="d" id="pfDate"></span></div>
+  </td></tr></thead>
+  <tfoot class="pf-foot"><tr><td>
+    <div class="pf-note">© <span class="yr"></span> Lexia. Tous droits réservés. Toute reproduction, représentation, adaptation ou diffusion, totale ou partielle, sans autorisation écrite préalable de Lexia est interdite. Diagnostic indicatif : il ne constitue pas un conseil juridique. Consultez un professionnel du droit avant toute décision.</div>
+  </td></tr></tfoot>
+  <tbody><tr><td>
+<div class="wrap">
+  <header class="no-print">
+    <div class="topbar">
+      <img src="data:image/png;base64,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" alt="Logo Lexia">
+      <button type="button" class="brand" data-act="home" title="Retour à l’accueil">Classificateur de risque IA<small>Règlement (UE) 2024/1689 sur l’intelligence artificielle</small></button>
+      <div class="meta" id="meta" aria-live="polite"></div>
+    </div>
+    <div class="progress" id="progress" role="progressbar" aria-label="Progression du questionnaire" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"></div>
+  </header>
+
+  <main id="main" tabindex="-1"></main>
+
+  <footer class="foot no-print">
+    <p class="legal">Ce calculateur est un outil d’aide à la qualification, fourni à titre informatif. Il ne constitue pas un conseil juridique et ne remplace pas l’analyse d’un avocat ou d’un conseiller spécialisé au regard de votre situation. Consultez un professionnel avant toute décision.</p>
+    <p>Référentiel : <a href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R1689" target="_blank" rel="noopener">règlement (UE) 2024/1689</a>, tel que modifié par le règlement (UE) 2026/1744. État du droit pris en compte : septembre 2026.</p>
+    <p>Le code de cet outil a été développé avec l’aide de l’intelligence artificielle.</p>
+    <p>© <span class="yr"></span> Lexia. Tous droits réservés. Le contenu, la structure, les textes et la présentation de cet outil sont protégés par le droit d’auteur. Toute reproduction, représentation, adaptation ou diffusion, totale ou partielle, par quelque procédé que ce soit, est interdite sans l’autorisation écrite préalable de Lexia.</p>
+  </footer>
+</div>
+<div id="printPlan" class="pp"></div>
+  </td></tr></tbody>
+</table>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Réglages ---------- */
+var CONTACT_URL = "";          // ex. "https://www.votre-site.be/contact" : affiche un bouton de contact sur le résultat
+var CONTACT_LABEL = "Prendre rendez-vous avec Lexia";
+var LS = "lexia-classif-ia-v1";
+
+/* ---------- Données de référence ---------- */
+var YNI = [["oui","Oui"],["non","Non"],["incertain","Incertain"]];
+var YN  = [["oui","Oui"],["non","Non"]];
+
+var PROHIB = [
+ ["p_a","Art. 5§1 a)","Techniques subliminales, manipulatrices ou trompeuses",
+  "Le système a-t-il recours à des techniques subliminales, délibérément manipulatrices ou trompeuses, ayant pour objectif ou pour effet d’altérer substantiellement le comportement d’une personne en portant atteinte à sa capacité de décision éclairée, d’une manière qui cause ou est raisonnablement susceptible de causer un préjudice important ?", ""],
+ ["p_b","Art. 5§1 b)","Exploitation de vulnérabilités",
+  "Le système exploite-t-il les vulnérabilités d’une personne ou d’un groupe dues à l’âge, au handicap ou à une situation sociale ou économique spécifique, avec un tel objectif ou un tel effet ?", ""],
+ ["p_c","Art. 5§1 c)","Notation sociale",
+  "Le système évalue-t-il ou classe-t-il des personnes en fonction de leur comportement social ou de caractéristiques personnelles, la note obtenue entraînant un traitement préjudiciable dans des contextes sans lien avec celui de la collecte, ou injustifié ou disproportionné ?", ""],
+ ["p_d","Art. 5§1 d)","Prédiction d’infractions fondée sur le seul profilage",
+  "Le système évalue-t-il ou prédit-il le risque qu’une personne commette une infraction pénale, uniquement sur la base d’un profilage ou de l’évaluation de ses traits de personnalité ?",
+  "Ne vise pas les systèmes qui étayent une évaluation humaine fondée sur des faits objectifs et vérifiables directement liés à une activité criminelle."],
+ ["p_e","Art. 5§1 e)","Moissonnage non ciblé d’images faciales",
+  "Le système crée-t-il ou développe-t-il des bases de données de reconnaissance faciale par le moissonnage non ciblé d’images faciales provenant de l’internet ou de la vidéosurveillance ?", ""],
+ ["p_f","Art. 5§1 f)","Reconnaissance des émotions au travail ou dans l’enseignement",
+  "Le système infère-t-il les émotions d’une personne sur le lieu de travail ou dans un établissement d’enseignement ?",
+  "Exception : systèmes destinés à être mis en place ou mis sur le marché pour des raisons médicales ou de sécurité."],
+ ["p_g","Art. 5§1 g)","Catégorisation biométrique fondée sur des données sensibles",
+  "Le système catégorise-t-il des personnes sur la base de leurs données biométriques afin d’arriver à des déductions concernant leur race, leurs opinions politiques, leur affiliation syndicale, leurs convictions religieuses ou philosophiques, leur vie sexuelle ou leur orientation sexuelle ?",
+  "Hors étiquetage ou filtrage d’ensembles de données biométriques acquis légalement, notamment dans le domaine répressif."],
+ ["p_h","Art. 5§1 h)","Identification biométrique à distance en temps réel à des fins répressives",
+  "Le système est-il utilisé pour l’identification biométrique à distance en temps réel dans des espaces accessibles au public, à des fins répressives ?",
+  "Exceptions strictement encadrées (recherche ciblée de victimes, prévention d’une menace imminente, localisation de suspects de certaines infractions graves), soumises à autorisation préalable (art. 5§2 à 5§7)."],
+ ["p_i","Art. 5 (règl. 2026/1744)","Contenus pédopornographiques ou intimes non consentis",
+  "Le système est-il conçu pour générer ou manipuler, ou permet-il sans garde-fous techniques de générer ou manipuler, des contenus pédopornographiques ou des contenus intimes ou sexuellement explicites non consentis représentant des personnes identifiables ?",
+  "Interdiction ajoutée par le règlement (UE) 2026/1744 (images, vidéo et audio). Garde-fous techniques exigés au plus tard le 2 décembre 2026."]
+];
+
+var A3 = [
+ {n:1,t:"Biométrie",items:[
+  ["1a","Identification biométrique à distance (hors vérification biométrique visant uniquement à confirmer qu’une personne est bien celle qu’elle prétend être)"],
+  ["1b","Catégorisation biométrique en fonction d’attributs ou de caractéristiques sensibles ou protégés, sur la base de leur déduction"],
+  ["1c","Reconnaissance des émotions"]]},
+ {n:2,t:"Infrastructures critiques",items:[
+  ["2a","Composant de sécurité dans la gestion ou l’exploitation d’infrastructures numériques critiques, du trafic routier ou de la fourniture d’eau, de gaz, de chauffage ou d’électricité"]]},
+ {n:3,t:"Éducation et formation professionnelle",items:[
+  ["3a","Déterminer l’accès, l’admission ou l’affectation à des établissements d’enseignement et de formation professionnelle"],
+  ["3b","Évaluer les acquis d’apprentissage, y compris pour orienter le processus d’apprentissage"],
+  ["3c","Évaluer le niveau d’enseignement approprié qu’une personne recevra ou pourra atteindre"],
+  ["3d","Surveiller et détecter des comportements interdits des étudiants lors d’examens"]]},
+ {n:4,t:"Emploi, gestion de la main-d’œuvre et accès à l’emploi indépendant",items:[
+  ["4a","Recrutement ou sélection : publication d’offres d’emploi ciblées, analyse et filtrage des candidatures, évaluation des candidats"],
+  ["4b","Décisions affectant les conditions de travail, la promotion ou la rupture de la relation de travail ; attribution de tâches sur la base du comportement ou de traits personnels ; suivi et évaluation des performances et du comportement"]]},
+ {n:5,t:"Accès aux services privés essentiels et aux services et prestations publics essentiels",items:[
+  ["5a","Évaluer, par ou pour une autorité publique, l’éligibilité à des prestations et services d’aide sociale essentiels (y compris les soins de santé), ou les octroyer, réduire, révoquer ou récupérer"],
+  ["5b","Évaluer la solvabilité ou établir la note de crédit de personnes physiques (hors détection de la fraude financière)"],
+  ["5c","Évaluer les risques et fixer les prix en matière d’assurance vie et d’assurance maladie"],
+  ["5d","Évaluer et classer les appels d’urgence, envoyer ou hiérarchiser les services d’intervention d’urgence, trier les patients"]]},
+ {n:6,t:"Répression (par ou pour les autorités répressives)",items:[
+  ["6a","Évaluer le risque qu’une personne devienne victime d’infractions pénales"],
+  ["6b","Polygraphes et outils similaires"],
+  ["6c","Évaluer la fiabilité des preuves au cours d’enquêtes ou de poursuites"],
+  ["6d","Évaluer le risque d’infraction ou de récidive autrement que sur la seule base du profilage, ou évaluer des traits de personnalité ou un comportement criminel passé"],
+  ["6e","Profilage dans le cadre de la détection d’infractions, d’enquêtes ou de poursuites"]]},
+ {n:7,t:"Migration, asile et gestion des contrôles aux frontières",items:[
+  ["7a","Polygraphes et outils similaires"],
+  ["7b","Évaluer un risque (sécurité, migration irrégulière, santé) posé par une personne qui entre ou est entrée sur le territoire d’un État membre"],
+  ["7c","Assister l’examen des demandes d’asile, de visa ou de titre de séjour et des plaintes connexes, y compris l’évaluation de la fiabilité des preuves"],
+  ["7d","Détecter, reconnaître ou identifier des personnes (hors vérification des documents de voyage)"]]},
+ {n:8,t:"Administration de la justice et processus démocratiques",items:[
+  ["8a","Aider une autorité judiciaire, ou un organe de règlement extrajudiciaire des litiges, à rechercher et interpréter les faits et le droit et à appliquer la loi à un ensemble concret de faits"],
+  ["8b","Influencer le résultat d’une élection ou d’un référendum ou le comportement électoral (hors outils d’organisation, d’optimisation ou de structuration logistique de campagnes)"]]}
+];
+var A3LABEL = {}; A3.forEach(function(d){d.items.forEach(function(it){A3LABEL[it[0]]=it[1];});});
+
+var TRANSP = [
+ ["t1","Art. 50§1","Interaction directe avec des personnes","Le système est-il destiné à interagir directement avec des personnes physiques (agent conversationnel, assistant vocal, etc.) ?","Sauf si cela ressort clairement du contexte pour une personne raisonnablement bien informée."],
+ ["t2","Art. 50§2","Génération de contenus de synthèse","Le système génère-t-il des contenus de synthèse de type audio, image, vidéo ou texte ?","Exception pour les fonctions d’assistance à la mise en forme standard ou qui ne modifient pas substantiellement les données d’entrée."],
+ ["t3","Art. 50§3","Reconnaissance des émotions ou catégorisation biométrique","Le système est-il un système de reconnaissance des émotions ou de catégorisation biométrique ?",""],
+ ["t4","Art. 50§4","Hypertrucages","Le système génère-t-il ou manipule-t-il des images ou des contenus audio ou vidéo constituant des hypertrucages (deepfakes) ?","Pour les œuvres manifestement artistiques, créatives, satiriques ou fictionnelles, l’obligation est limitée à une mention qui n’entrave pas l’œuvre."],
+ ["t5","Art. 50§4","Textes publiés sur des questions d’intérêt public","Le système génère-t-il ou manipule-t-il des textes publiés dans le but d’informer le public sur des questions d’intérêt public ?","Exception si le contenu a fait l’objet d’un contrôle humain ou éditorial et qu’une personne en assume la responsabilité éditoriale."]
+];
+
+var ROLE_LABEL = {fournisseur:"Fournisseur",deployeur:"Déployeur",importateur:"Importateur",distributeur:"Distributeur",mandataire:"Mandataire",fabricant:"Fabricant de produit"};
+
+/* ---------- Définition des étapes ---------- */
+function has(id,v){return (A[id]||[]).indexOf(v)>-1;}
+function a3Sel(){var out=[];A3.forEach(function(d){(A["a3_"+d.n]||[]).forEach(function(v){out.push(v);});});return out;}
+function outOfScope(){
+  return A.q_ai==="non" || A.q_terr==="aucun" || has("q_excl","defense") || has("q_excl","recherche") || has("q_excl","rd") || has("q_excl","perso");
+}
+function gIsProv(){return A.g_type==="fournit"||A.g_type==="modifie";}
+
+var STEPS = [
+ {id:"intro"},
+ {id:"champ", title:"Qualification et champ d’application", src:"Art. 2 et art. 3, point 1", min:1.5,
+  lede:"Le règlement ne s’applique qu’aux systèmes d’IA au sens de l’article 3, point 1, sous réserve du champ territorial et des exclusions de l’article 2.",
+  blocks:[
+   {type:"radio",id:"q_ai",ref:"Art. 3, point 1",label:"Le système est-il conçu pour fonctionner avec un certain niveau d’autonomie et infère-t-il, à partir des entrées qu’il reçoit, la manière de générer des sorties telles que des prédictions, du contenu, des recommandations ou des décisions ?",
+    help:"Sont exclus les logiciels fondés exclusivement sur des règles définies par des personnes physiques pour exécuter automatiquement des opérations (considérant 12). Voir les lignes directrices de la Commission sur la définition du système d’IA.",opts:YNI},
+   {type:"radio",id:"q_terr",ref:"Art. 2§1",stack:true,label:"Quel est le rattachement territorial de votre organisation ?",opts:[
+     ["ue","Établie ou située dans l’Union européenne"],
+     ["horsue","Établie hors de l’Union, mais le système est mis sur le marché de l’Union ou ses sorties y sont utilisées"],
+     ["aucun","Établie hors de l’Union, sans mise sur le marché de l’Union ni utilisation des sorties dans l’Union"]]},
+   {type:"check",id:"q_excl",ref:"Art. 2§3 à 2§12",label:"Une ou plusieurs exclusions s’appliquent-elles ?",items:[
+     ["defense","Système mis sur le marché, mis en service ou utilisé exclusivement à des fins militaires, de défense ou de sécurité nationale","Art. 2§3"],
+     ["recherche","Système, ou ses sorties, spécifiquement développé et mis en service à la seule fin de la recherche et du développement scientifiques","Art. 2§6"],
+     ["rd","Activité de recherche, d’essai ou de développement antérieure à la mise sur le marché ou à la mise en service (hors essais en conditions réelles)","Art. 2§8"],
+     ["perso","Utilisation par une personne physique dans le cadre d’une activité strictement personnelle à caractère non professionnel","Art. 2§10"],
+     ["libre","Système publié sous licence libre et ouverte","Art. 2§12"],
+     ["__none","Aucune de ces exclusions",""]]},
+   {type:"note",tone:"",showIf:function(){return A.q_ai==="incertain";},html:"<p>La qualification de système d’IA reste à confirmer. Le questionnaire se poursuit en retenant, par prudence, l’hypothèse d’un système d’IA.</p>"},
+   {type:"note",tone:"warn",showIf:outOfScope,html:"<p>Au vu de vos réponses, le système semble hors du champ du règlement. Le bouton « Voir le résultat » vous mène directement au diagnostic.</p>"},
+   {type:"note",tone:"",showIf:function(){return has("q_excl","libre")&&!outOfScope();},html:"<p>L’exclusion des licences libres et ouvertes ne joue pas pour les systèmes interdits, à haut risque ou relevant de l’article 50. Poursuivez le questionnaire pour le vérifier.</p>"}
+  ]},
+ {id:"role", title:"Votre rôle dans la chaîne de valeur", src:"Art. 3, points 3 à 8, et art. 25", min:1,
+  lede:"Les obligations dépendent de la qualité en laquelle vous intervenez. Plusieurs qualités peuvent se cumuler pour un même système.",
+  blocks:[
+   {type:"check",id:"q_role",ref:"Art. 3",label:"En quelle(s) qualité(s) intervenez-vous à l’égard de ce système ?",items:[
+     ["fournisseur","Fournisseur : vous développez le système ou le faites développer et le mettez sur le marché ou en service sous votre propre nom ou marque","Art. 3, point 3"],
+     ["deployeur","Déployeur : vous utilisez le système sous votre propre autorité, dans le cadre d’une activité professionnelle","Art. 3, point 4"],
+     ["importateur","Importateur : établi dans l’Union, vous mettez sur le marché un système portant le nom ou la marque d’une personne établie dans un pays tiers","Art. 3, point 6"],
+     ["distributeur","Distributeur : vous mettez le système à disposition sur le marché de l’Union, sans être fournisseur ni importateur","Art. 3, point 7"],
+     ["mandataire","Mandataire : vous avez reçu un mandat écrit d’un fournisseur établi hors de l’Union","Art. 3, point 5"],
+     ["fabricant","Fabricant de produit : vous mettez sur le marché, sous votre nom, un produit qui intègre le système","Art. 25§3"]]},
+   {type:"check",id:"q_art25",ref:"Art. 25§1",label:"Vous trouvez-vous dans l’une des situations suivantes ?",
+    help:"Dans ces situations, un distributeur, un importateur, un déployeur ou un autre tiers est considéré comme fournisseur d’un système à haut risque.",items:[
+     ["marque","Vous apposez votre nom ou votre marque sur un système à haut risque déjà mis sur le marché ou mis en service","Art. 25§1 a)"],
+     ["modif","Vous apportez une modification substantielle à un système à haut risque, qui reste à haut risque","Art. 25§1 b)"],
+     ["finalite","Vous modifiez la destination d’un système (y compris à usage général) non classé à haut risque, de sorte qu’il le devient","Art. 25§1 c)"],
+     ["__none","Aucune de ces situations",""]]}
+  ]},
+ {id:"interdit", title:"Pratiques interdites", src:"Art. 5", min:1.5,
+  lede:"Ces interdictions s’appliquent depuis le 2 février 2025. Répondez au regard des usages prévus et raisonnablement prévisibles du système, à la lumière des lignes directrices de la Commission sur les pratiques interdites.",
+  blocks: PROHIB.map(function(p){return {type:"radio",id:p[0],ref:p[1],label:p[3],help:p[4],opts:YNI};})
+ },
+ {id:"annexe1", title:"Produits soumis à la législation d’harmonisation", src:"Art. 6§1 et annexe I", min:0.5,
+  lede:"Un système d’IA est à haut risque lorsqu’il est un produit, ou le composant de sécurité d’un produit, couvert par l’annexe I et soumis à une évaluation de la conformité par un tiers.",
+  blocks:[
+   {type:"radio",id:"a1_prod",ref:"Art. 6§1 a)",label:"Le système est-il destiné à être utilisé comme composant de sécurité d’un produit, ou est-il lui-même un produit, couvert par la législation d’harmonisation de l’Union énumérée à l’annexe I ?",
+    help:"Par exemple : dispositifs médicaux et de diagnostic in vitro, jouets, ascenseurs, équipements radio, équipements sous pression, véhicules à moteur, aviation civile. Le règlement (UE) 2026/1744 précise qu’un système qui se borne à assister l’utilisateur ou à optimiser des performances, sans risque pour la santé ou la sécurité en cas de défaillance, n’est pas un composant de sécurité ; il modifie aussi le traitement des machines.",opts:YNI},
+   {type:"radio",id:"a1_tiers",ref:"Art. 6§1 b)",showIf:function(){return A.a1_prod==="oui"||A.a1_prod==="incertain";},
+    label:"Ce produit doit-il faire l’objet d’une évaluation de la conformité par un tiers en vue de sa mise sur le marché ou de sa mise en service ?",opts:YNI}
+  ]},
+ {id:"annexe3", title:"Domaines à haut risque", src:"Art. 6§2 et annexe III", min:1.5,
+  lede:"Cochez chaque usage prévu du système. L’annexe III vise la destination du système : celle définie par le fournisseur ou celle qui résulte de votre utilisation effective.",
+  blocks: (function(){
+    var b=[];
+    A3.forEach(function(d){b.push({type:"check",id:"a3_"+d.n,ref:"Annexe III, point "+d.n,label:d.t,required:false,
+      items:d.items.map(function(it){return [it[0],it[1],"Point "+d.n+" "+it[0].slice(1)+")"];})});});
+    b.push({type:"check",id:"a3_none",ref:"",label:"Aucun domaine",required:false,items:[["__none","Aucun de ces usages ne correspond au système",""]]});
+    b.push({type:"note",tone:"warn",id:"a3_err",showIf:function(){return false;},html:"<p>Cochez au moins un usage, ou indiquez qu’aucun ne correspond au système.</p>"});
+    return b;
+  })(),
+  validate:function(){return a3Sel().length>0 || has("a3_none","__none");}
+ },
+ {id:"derogation", title:"Dérogation pour les systèmes de l’annexe III", src:"Art. 6§3 et 6§4", min:1,
+  when:function(){return a3Sel().length>0;},
+  lede:"Un système visé à l’annexe III n’est pas considéré comme à haut risque s’il ne présente pas de risque important de préjudice, notamment parce qu’il n’influence pas de manière significative le résultat de la prise de décision.",
+  blocks:[
+   {type:"radio",id:"d_profil",ref:"Art. 6§3, dernier alinéa",label:"Le système effectue-t-il un profilage de personnes physiques, au sens de l’article 4, point 4, du RGPD ?",opts:YNI},
+   {type:"note",tone:"warn",showIf:function(){return A.d_profil==="oui";},html:"<p>Un système de l’annexe III qui effectue un profilage de personnes physiques est toujours considéré comme à haut risque. Aucune dérogation n’est possible.</p>"},
+   {type:"check",id:"d_cond",ref:"Art. 6§3 a) à d)",showIf:function(){return A.d_profil==="non"||A.d_profil==="incertain";},label:"Le système est-il destiné à l’une des tâches suivantes ?",items:[
+     ["a","Accomplir une tâche procédurale étroite","Art. 6§3 a)"],
+     ["b","Améliorer le résultat d’une activité humaine préalablement réalisée","Art. 6§3 b)"],
+     ["c","Détecter des schémas décisionnels ou des écarts par rapport à des schémas antérieurs, sans remplacer ni influencer l’évaluation humaine réalisée au préalable en l’absence d’un examen humain approprié","Art. 6§3 c)"],
+     ["d","Exécuter une tâche préparatoire à une évaluation pertinente aux fins des cas d’utilisation de l’annexe III","Art. 6§3 d)"],
+     ["__none","Aucune de ces tâches",""]]},
+   {type:"radio",id:"d_risque",ref:"Art. 6§3, al. 1",showIf:function(){return (A.d_profil==="non"||A.d_profil==="incertain") && (A.d_cond||[]).length && !has("d_cond","__none");},
+    label:"Le système présente-t-il néanmoins un risque important de préjudice pour la santé, la sécurité ou les droits fondamentaux des personnes, notamment en influençant de manière significative le résultat de la prise de décision ?",opts:YNI}
+  ]},
+ {id:"transparence", title:"Obligations de transparence", src:"Art. 50", min:1,
+  lede:"Ces obligations s’appliquent depuis le 2 août 2026, quel que soit le niveau de risque. Pour les systèmes mis sur le marché avant cette date, le marquage prévu à l’article 50§2 s’impose au 2 décembre 2026.",
+  blocks: TRANSP.map(function(t){return {type:"radio",id:t[0],ref:t[1],label:t[3],help:t[4],opts:YNI};})
+ },
+ {id:"gpai", title:"Modèles d’IA à usage général", src:"Art. 3, point 63, et art. 51 à 55", min:1,
+  lede:"Les obligations des fournisseurs de modèles d’IA à usage général s’appliquent depuis le 2 août 2025. Elles s’ajoutent, le cas échéant, à celles qui visent le système lui-même.",
+  blocks:[
+   {type:"radio",id:"g_type",ref:"Art. 3, point 63",stack:true,label:"Quelle est votre relation avec un éventuel modèle d’IA à usage général (grand modèle de langage, par exemple) ?",opts:[
+     ["fournit","Nous développons, ou faisons développer, un modèle d’IA à usage général et le mettons sur le marché"],
+     ["modifie","Nous modifions de façon significative un modèle tiers (ajustement fin important, par exemple)"],
+     ["integre","Nous intégrons dans notre système un modèle à usage général fourni par un tiers (API ou modèle téléchargé)"],
+     ["aucun","Le système ne repose sur aucun modèle d’IA à usage général"],
+     ["incertain","Incertain"]]},
+   {type:"radio",id:"g_sys",ref:"Art. 51",showIf:gIsProv,label:"Le modèle présente-t-il un risque systémique : quantité cumulée de calcul utilisée pour son entraînement supérieure à 10²⁵ FLOP, ou désignation par la Commission ?",opts:YNI},
+   {type:"radio",id:"g_libre",ref:"Art. 53§2",showIf:gIsProv,label:"Le modèle est-il publié sous licence libre et ouverte, avec ses paramètres, son architecture et les informations sur son utilisation rendus publics ?",opts:YN},
+   {type:"radio",id:"g_avant",ref:"Art. 111§3",showIf:gIsProv,label:"Le modèle a-t-il été mis sur le marché avant le 2 août 2025 ?",opts:YN}
+  ]},
+ {id:"resultat"}
+];
+var QSTEPS = [1,2,3,4,5,6,7,8];
+
+/* ---------- État ---------- */
+var A = {}, cur = 0, hist = [];
+function load(){try{var s=JSON.parse(localStorage.getItem(LS)||"null");if(s&&s.A){A=s.A;cur=s.cur||0;hist=s.hist||[];}}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify({A:A,cur:cur,hist:hist}));}catch(e){}}
+function reset(){A={};cur=0;hist=[];try{localStorage.removeItem(LS);}catch(e){}}
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function applies(i){var s=STEPS[i];return !s.when||s.when();}
+function vis(b){return !b.showIf||b.showIf();}
+function req(b){return (b.type==="radio"||b.type==="check")?b.required!==false:!!b.required;}
+
+/* ---------- Rendu des questions ---------- */
+function blockHTML(b,i){
+  var ref='<div class="q-ref">'+esc(b.ref||"")+'</div>';
+  if(b.type==="note") return '<div class="note '+(b.tone||"")+'" data-b="'+i+'"'+(b.id?' id="'+b.id+'"':'')+'>'+b.html+'</div>';
+  if(b.type==="text"){
+    var f=b.multi?'<textarea class="field" id="f_'+b.id+'" data-t="'+b.id+'" placeholder="'+esc(b.ph||"")+'">'+esc(A[b.id])+'</textarea>'
+                 :'<input class="field" type="text" id="f_'+b.id+'" data-t="'+b.id+'" value="'+esc(A[b.id])+'" placeholder="'+esc(b.ph||"")+'" autocomplete="off">';
+    return '<div class="q" data-b="'+i+'">'+ref+'<div class="q-body"><label class="q-label" for="f_'+b.id+'">'+esc(b.label)+(b.required?'':' <span class="opt-tag">(facultatif)</span>')+'</label>'+(b.help?'<p class="q-help">'+esc(b.help)+'</p>':'')+f+'<p class="q-err">Ce champ est requis.</p></div></div>';
+  }
+  var inner="";
+  if(b.type==="radio"){
+    if(b.stack){
+      inner=b.opts.map(function(o){return '<label class="opt"><input type="radio" name="'+b.id+'" value="'+o[0]+'"'+(A[b.id]===o[0]?' checked':'')+'><span class="ot">'+esc(o[1])+'</span></label>';}).join("");
+    } else {
+      inner='<div class="seg">'+b.opts.map(function(o){return '<label><input type="radio" name="'+b.id+'" value="'+o[0]+'"'+(A[b.id]===o[0]?' checked':'')+'><span>'+esc(o[1])+'</span></label>';}).join("")+'</div>';
+    }
+  } else if(b.type==="check"){
+    inner=b.items.map(function(it){
+      var on=(A[b.id]||[]).indexOf(it[0])>-1;
+      return '<label class="opt'+(it[0]==="__none"?' none':'')+'"><input type="checkbox" name="'+b.id+'" value="'+it[0]+'"'+(on?' checked':'')+'><span class="ot">'+esc(it[1])+(it[2]?'<span class="oref">'+esc(it[2])+'</span>':'')+'</span></label>';
+    }).join("");
+  }
+  var err=b.type==="check"?"Cochez au moins une case.":"Choisissez une réponse.";
+  return '<div class="q" data-b="'+i+'">'+ref+'<div class="q-body"><fieldset><legend>'+esc(b.label)+'</legend>'+(b.help?'<p class="q-help">'+esc(b.help)+'</p>':'')+inner+'<p class="q-err">'+err+'</p></fieldset></div></div>';
+}
+
+var INTRO_BLOCKS = [
+  {type:"text",id:"sys_name",ref:"Système",label:"Nom du système d’IA évalué",required:true,ph:"Ex. : outil de présélection des candidatures"},
+  {type:"text",id:"sys_org",ref:"Organisation",label:"Organisation"},
+  {type:"text",id:"sys_desc",ref:"Description",label:"Description et finalité du système",multi:true,ph:"Fonctionnalités, destination prévue, personnes concernées, contexte de déploiement…"},
+  {type:"check",id:"ack",ref:"Avertissement",label:"Portée du diagnostic",items:[["ok","J’ai compris que ce diagnostic est indicatif et ne constitue pas un conseil juridique.",""]]}
+];
+
+function curBlocks(){return cur===0?INTRO_BLOCKS:(STEPS[cur].blocks||[]);}
+
+function render(){
+  var m=document.getElementById("main"), s=STEPS[cur], h="";
+  if(cur===0){
+    h+='<div class="stephead"><h1>Qualifier un système d’IA au regard du règlement européen</h1>'+
+       '<p class="lede">Décrivez votre système et répondez aux questions : l’outil indique s’il relève d’une pratique interdite, du haut risque, du risque limité ou du risque minimal, précise vos obligations selon votre rôle et propose un plan d’action daté.</p></div>'+
+       '<dl class="intro-facts">'+
+       '<div><dt>Durée</dt><dd>Environ 8 à 10 minutes, en 8 étapes.</dd></div>'+
+       '<div><dt>Référentiel</dt><dd><a href="https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R1689" target="_blank" rel="noopener">Règlement (UE) 2024/1689</a> (articles 2 à 6, 25, 50 à 55 et annexes I et III), tel que modifié par le règlement (UE) 2026/1744.</dd></div>'+
+       '<div><dt>Résultat</dt><dd>Niveau de risque motivé, rôle dans la chaîne de valeur, obligations relatives aux modèles d’IA à usage général, plan d’action et récapitulatif imprimables en PDF.</dd></div>'+
+       '<div><dt>Confidentialité</dt><dd>Vos réponses restent dans votre navigateur. Aucune donnée n’est transmise à Lexia ni à un tiers.</dd></div>'+
+       '</dl>'+
+       '<div class="note warn"><p><strong>Ceci n’est pas un conseil juridique.</strong> Ce calculateur fournit une aide à la qualification, à titre informatif. Il ne remplace pas l’analyse d’un avocat ou d’un conseiller spécialisé au regard de votre situation concrète. Consultez un professionnel avant toute décision.</p></div>';
+    h+=INTRO_BLOCKS.map(blockHTML).join("");
+    h+='<div class="nav"><span></span><div class="right"><button class="btn btn-primary" data-act="next">Commencer le diagnostic</button></div></div>';
+  } else if(s.id==="resultat"){
+    h+=resultHTML();
+  } else {
+    var k=QSTEPS.indexOf(cur)+1;
+    h+='<div class="stephead"><p class="count">Étape '+k+' sur 8</p><h1>'+esc(s.title)+'</h1>'+(s.lede?'<p class="lede">'+esc(s.lede)+'</p>':'')+'<p class="src">Fondement : '+esc(s.src)+'</p></div>';
+    h+=s.blocks.map(blockHTML).join("");
+    var nextLabel = (s.id==="gpai"||(s.id==="champ"&&outOfScope()))?"Voir le résultat":"Continuer";
+    h+='<div class="nav"><button class="btn btn-ghost" data-act="prev">Précédent</button><div class="right"><button class="btn btn-primary" data-act="next" id="nextBtn">'+nextLabel+'</button></div></div>';
+  }
+  m.innerHTML=h;
+  document.body.classList.toggle("on-result", s && s.id==="resultat");
+  if(!(s && s.id==="resultat")){ var pp=document.getElementById("printPlan"); if(pp) pp.innerHTML=""; }
+  refresh();
+  header();
+}
+
+function refresh(){
+  var bl=curBlocks();
+  document.querySelectorAll("#main [data-b]").forEach(function(el){
+    var b=bl[+el.getAttribute("data-b")]; if(b) el.hidden=!vis(b);
+  });
+  var nb=document.getElementById("nextBtn");
+  if(nb && STEPS[cur].id==="champ") nb.textContent=outOfScope()?"Voir le résultat":"Continuer";
+}
+
+function remainingMin(){
+  var t=0; for(var i=Math.max(cur,1);i<=8;i++){ if(applies(i)) t+=STEPS[i].min||0; }
+  return Math.max(1,Math.ceil(t));
+}
+function header(){
+  var meta=document.getElementById("meta"), pg=document.getElementById("progress"), s=STEPS[cur];
+  var pos = s.id==="resultat"?8:(cur===0?0:QSTEPS.indexOf(cur));
+  pg.innerHTML=QSTEPS.map(function(q,i){
+    var c = s.id==="resultat"?"done":(i<pos?"done":(i===pos&&cur!==0?"now":""));
+    return '<span class="'+c+'" title="'+esc(STEPS[q].title)+'"></span>';
+  }).join("");
+  pg.setAttribute("aria-valuenow", s.id==="resultat"?8:(cur===0?0:pos+1));
+  if(cur===0) meta.innerHTML='<strong>Durée estimée</strong><br>8 à 10 minutes';
+  else if(s.id==="resultat") meta.innerHTML='<strong>Diagnostic terminé</strong><br>100 %';
+  else meta.innerHTML='<strong>Étape '+(pos+1)+' sur 8</strong><br>Environ '+remainingMin()+' min restantes';
+}
+
+/* ---------- Saisie ---------- */
+document.addEventListener("change",function(e){
+  var t=e.target; if(!t.name) return;
+  if(t.type==="radio"){ A[t.name]=t.value; }
+  if(t.type==="checkbox"){
+    var name=t.name, boxes=document.querySelectorAll('input[name="'+name+'"]');
+    if(t.checked && t.value==="__none"){ boxes.forEach(function(x){if(x!==t)x.checked=false;}); }
+    if(t.checked && t.value!=="__none"){ boxes.forEach(function(x){if(x.value==="__none")x.checked=false;}); }
+    // Annexe III : « aucun » exclut tous les domaines, et inversement
+    if(name==="a3_none" && t.checked){ document.querySelectorAll('input[name^="a3_"]').forEach(function(x){ if(x.name!=="a3_none"){x.checked=false;} }); A3.forEach(function(d){A["a3_"+d.n]=[];}); }
+    if(/^a3_\d$/.test(name) && t.checked){ var n=document.querySelector('input[name="a3_none"]'); if(n){n.checked=false;} A.a3_none=[]; }
+    A[name]=Array.prototype.filter.call(boxes,function(x){return x.checked;}).map(function(x){return x.value;});
+  }
+  var q=t.closest(".q"); if(q) q.classList.remove("invalid");
+  if(STEPS[cur].id==="annexe3"){ var er=document.getElementById("a3_err"); if(er) er.hidden=true; }
+  save(); refresh(); header();
+});
+document.addEventListener("input",function(e){
+  var t=e.target, id=t.getAttribute&&t.getAttribute("data-t"); if(!id) return;
+  A[id]=t.value; var q=t.closest(".q"); if(q) q.classList.remove("invalid"); save();
+});
+
+function validate(){
+  var bl=curBlocks(), first=null, ok=true;
+  document.querySelectorAll("#main [data-b]").forEach(function(el){
+    var b=bl[+el.getAttribute("data-b")]; if(!b||!vis(b)||!req(b)) return;
+    var v=A[b.id], bad = b.type==="text"? !String(v||"").trim() : (b.type==="check"? !(v&&v.length) : !v);
+    el.classList.toggle("invalid",bad); if(bad){ok=false; if(!first) first=el;}
+  });
+  if(STEPS[cur].validate && !STEPS[cur].validate()){
+    ok=false; var er=document.getElementById("a3_err"); if(er){er.hidden=false; if(!first) first=er;}
+  }
+  if(first){ first.scrollIntoView({behavior:"smooth",block:"center"}); var f=first.querySelector("input,textarea"); if(f) setTimeout(function(){f.focus({preventScroll:true});},250); }
+  return ok;
+}
+
+function go(i,push){
+  if(push) hist.push(cur);
+  cur=i; save(); render();
+  window.scrollTo(0,0);
+  var m=document.getElementById("main"); if(m) m.focus({preventScroll:true});
+}
+function next(){
+  if(!validate()) return;
+  if(STEPS[cur].id==="champ" && outOfScope()){ go(STEPS.length-1,true); return; }
+  var j=cur+1; while(j<STEPS.length-1 && !applies(j)) j++;
+  go(j,true);
+}
+function prev(){ var p=hist.length?hist.pop():0; go(p,false); }
+
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-act]"); if(!b) return;
+  var a=b.getAttribute("data-act");
+  if(a==="next") next();
+  if(a==="prev") prev();
+  if(a==="print") { document.body.classList.add("on-result"); window.print(); }
+  if(a==="pdf") { downloadPDF(); }
+  if(a==="edit") { hist=[0]; go(1,false); }
+  if(a==="restart") {
+    var box=document.getElementById("restartBox");
+    if(box){ box.hidden=false; var y=box.querySelector('[data-act="restart-yes"]'); if(y) y.focus(); }
+    else { reset(); render(); window.scrollTo(0,0); }
+  }
+  if(a==="restart-yes") { reset(); render(); window.scrollTo(0,0); }
+  if(a==="restart-no") { var bx=document.getElementById("restartBox"); if(bx) bx.hidden=true; }
+  if(a==="home") { if(cur!==0){ go(0,true); } }
+  if(a==="newtab") { save(); window.open(location.href,"_blank","noopener"); }
+});
+function openRecap(){ document.querySelectorAll("details.recap").forEach(function(d){d.open=true;}); }
+
+
+/* ---------- Calcul du résultat ---------- */
+function compute(){
+  var r={tier:"",reasons:[],unc:[],roles:[],hr:false,annexI:false,a3:[],a3HR:false,derog:false,transp:[],prohib:[]};
+  var roles=(A.q_role||[]).slice();
+  var r25=(A.q_art25||[]).filter(function(x){return x!=="__none";});
+  r.r25=r25;
+
+  if(outOfScope()){
+    r.tier="hors";
+    if(A.q_ai==="non") r.reasons.push(["Art. 3, point 1","Le système ne répond pas à la définition du système d’IA (absence d’inférence ou d’autonomie)."]);
+    if(A.q_terr==="aucun") r.reasons.push(["Art. 2§1","Aucun rattachement au marché de l’Union ni utilisation des sorties dans l’Union."]);
+    if(has("q_excl","defense")) r.reasons.push(["Art. 2§3","Usage exclusivement militaire, de défense ou de sécurité nationale."]);
+    if(has("q_excl","recherche")) r.reasons.push(["Art. 2§6","Système développé et mis en service à la seule fin de la recherche scientifique."]);
+    if(has("q_excl","rd")) r.reasons.push(["Art. 2§8","Activité de recherche, d’essai ou de développement antérieure à la mise sur le marché."]);
+    if(has("q_excl","perso")) r.reasons.push(["Art. 2§10","Utilisation strictement personnelle et non professionnelle."]);
+    r.roles=roles; scoreIt(r); return r;
+  }
+  if(A.q_ai==="incertain") r.unc.push(["Art. 3, point 1","Qualification de système d’IA à confirmer (hypothèse retenue : système d’IA)."]);
+
+  PROHIB.forEach(function(p){
+    if(A[p[0]]==="oui"){ r.prohib.push(p[0]); r.reasons.push([p[1],p[2]+"."]); }
+    if(A[p[0]]==="incertain") r.unc.push([p[1],p[2]+" : à analyser en priorité."]);
+  });
+
+  r.annexI = A.a1_prod==="oui" && A.a1_tiers==="oui";
+  if(A.a1_prod==="incertain" || (A.a1_prod==="oui" && A.a1_tiers==="incertain")) r.unc.push(["Art. 6§1","Relevance de l’annexe I ou exigence d’une évaluation par un tiers à confirmer."]);
+  if(A.a1_prod==="incertain" && A.a1_tiers==="oui") r.unc.push(["Art. 6§1","Si le produit relève de l’annexe I, le système sera à haut risque."]);
+
+  r.a3=a3Sel();
+  if(r.a3.length){
+    var conds=(A.d_cond||[]).filter(function(x){return x!=="__none";});
+    r.derog = A.d_profil==="non" && conds.length>0 && A.d_risque==="non";
+    r.a3HR = !r.derog;
+    if(A.d_profil==="incertain") r.unc.push(["Art. 6§3","Existence d’un profilage à confirmer : en cas de profilage, aucune dérogation n’est possible."]);
+    if(A.d_risque==="incertain") r.unc.push(["Art. 6§3","Risque important de préjudice à évaluer : la dérogation n’est pas retenue à ce stade."]);
+    if(A.d_profil==="incertain" && conds.length && A.d_risque==="non") r.unc.push(["Art. 6§3","La dérogation pourrait s’appliquer si l’absence de profilage est confirmée."]);
+  }
+  r.hr = r.annexI || r.a3HR;
+  if(r.annexI) r.reasons.push(["Art. 6§1","Produit ou composant de sécurité relevant de l’annexe I, soumis à une évaluation de la conformité par un tiers."]);
+  if(r.a3HR) r.a3.forEach(function(c){ r.reasons.push(["Annexe III, "+c.charAt(0)+" "+c.slice(1)+")",A3LABEL[c]+"."]); });
+  if(r.a3HR && A.d_profil==="oui") r.reasons.push(["Art. 6§3, dernier al.","Le système effectue un profilage de personnes physiques : il reste à haut risque."]);
+  if(r.derog) r.reasons.push(["Art. 6§3","Usage visé à l’annexe III ("+r.a3.join(", ")+"), mais dérogation applicable : tâche limitée, pas de profilage, pas de risque important de préjudice."]);
+
+  TRANSP.forEach(function(t){
+    if(A[t[0]]==="oui"){ r.transp.push(t[0]); r.reasons.push([t[1],t[2]+" : obligation de transparence."]); }
+    if(A[t[0]]==="incertain") r.unc.push([t[1],t[2]+" : à vérifier."]);
+  });
+  if(A.g_type==="incertain") r.unc.push(["Art. 3, point 63","Recours à un modèle d’IA à usage général à vérifier."]);
+  if(gIsProv() && A.g_sys==="incertain") r.unc.push(["Art. 51","Seuil de risque systémique (10²⁵ FLOP) à vérifier."]);
+
+  if(r.prohib.length) r.tier="interdit";
+  else if(r.hr) r.tier="haut";
+  else if(r.transp.length) r.tier="limite";
+  else r.tier="minimal";
+
+  if(r.tier==="minimal" && has("q_excl","libre")) r.reasons.push(["Art. 2§12","Système publié sous licence libre et ouverte, ni interdit ni à haut risque, ni visé par l’article 50 : l’exclusion paraît applicable."]);
+  if(r.tier==="minimal" && !r.reasons.length) r.reasons.push(["Art. 5, 6 et 50","Aucune pratique interdite, aucun cas de haut risque et aucune obligation de transparence n’a été identifié."]);
+
+  if(r.hr && r25.length && roles.indexOf("fournisseur")<0) roles.push("fournisseur25");
+  r.roles=roles;
+  scoreIt(r);
+  return r;
+}
+
+var TL={interdit:"Interdit",haut:"Haut risque",limite:"Risque limité",minimal:"Risque minimal",hors:"Hors champ"};
+var BANDS={hors:[0,4],minimal:[5,29],limite:[30,59],haut:[60,89],interdit:[90,100]};
+var RANK={hors:0,minimal:1,limite:2,haut:3,interdit:4};
+function scoreIt(r){
+  var B=BANDS[r.tier], s=B[0], d=[["Base du niveau « "+TL[r.tier]+" »",B[0]]];
+  function add(l,p){ if(p>0){ d.push([l,p]); s+=p; } }
+  function cnt(ids){ return ids.filter(function(id){return A[id]==="incertain";}).length; }
+  var u5=cnt(PROHIB.map(function(p){return p[0];}));
+  var uHR=cnt(["q_ai","d_profil","d_risque"]) + ((A.a1_prod==="incertain"||(A.a1_prod==="oui"&&A.a1_tiers==="incertain"))?1:0);
+  var uO=cnt(TRANSP.map(function(x){return x[0];}).concat(["g_type"])) + (gIsProv()&&A.g_sys==="incertain"?1:0);
+  if(r.tier==="hors"){
+    add("Réponses « Incertain » (1 point chacune)", u5+uHR+uO);
+  } else {
+    if(r.prohib.length>1) add("Pratiques interdites supplémentaires ("+(r.prohib.length-1)+" × 3)",(r.prohib.length-1)*3);
+    add("Pratiques interdites incertaines ("+u5+" × 6)",u5*6);
+    var doms={}; r.a3.forEach(function(c){doms[c.charAt(0)]=1;}); var nd=Object.keys(doms).length;
+    add("Catégories de l’annexe III ("+nd+" × 5)",nd*5);
+    if(r.annexI) add("Annexe I applicable",8);
+    add("Incertitudes sur le haut risque ("+uHR+" × 4)",uHR*4);
+    add("Obligations de transparence ("+r.transp.length+" × 4)",r.transp.length*4);
+    if(gIsProv() && A.g_sys==="oui") add("Modèle d’IA à usage général à risque systémique",10);
+    add("Autres incertitudes ("+uO+" × 2)",uO*2);
+  }
+  r.scoreRaw=s; r.score=Math.min(s,B[1]); r.scoreDetail=d; r.band=B;
+  // Niveau potentiel : le plus élevé que les points incertains pourraient atteindre
+  r.potential=null;
+  if(r.tier!=="hors"){
+    if(u5>0 && RANK[r.tier]<4) r.potential="interdit";
+    else if(RANK[r.tier]<3 && (A.a1_prod==="incertain"||(A.a1_prod==="oui"&&A.a1_tiers==="incertain")||(a3Sel().length&&(A.d_profil==="incertain"||A.d_risque==="incertain")))) r.potential="haut";
+    else if(RANK[r.tier]<2 && cnt(TRANSP.map(function(x){return x[0];}))>0) r.potential="limite";
+  }
+}
+
+function isProv(r){return r.roles.indexOf("fournisseur")>-1||r.roles.indexOf("fournisseur25")>-1||r.roles.indexOf("fabricant")>-1||!r.roles.length;}
+function isDep(r){return r.roles.indexOf("deployeur")>-1||!r.roles.length;}
+function hrDate(r){return r.a3HR?"2 décembre 2027":"2 août 2028";}
+
+function buildPlan(r){
+  var L=[]; function add(h,t,d,ref){L.push({h:h,t:t,d:d,ref:ref||""});}
+  if(r.tier==="hors"){
+    add("now","Documenter l’analyse de qualification","Consignez les motifs pour lesquels le système est considéré comme hors du champ du règlement, avec les éléments qui les étayent.","Art. 2 et 3");
+    add("short","Vérifier les autres régimes applicables","RGPD, droit du travail, droit de la consommation, responsabilité du fait des produits : l’exclusion du règlement sur l’IA n’écarte pas ces cadres.","");
+    add("short","Prévoir une revue en cas d’évolution","Un changement de fonctionnalité, de destination ou de contexte d’utilisation peut faire entrer le système dans le champ du règlement.","");
+    return L;
+  }
+  add("now","Inscrire le système au registre interne des systèmes d’IA","Consignez la présente classification, sa justification et le nom de la personne responsable du suivi.","Bonne pratique");
+  if(r.unc.length) add("now","Lever les points d’incertitude","Faites analyser les "+r.unc.length+" point(s) incertain(s) relevé(s) dans le diagnostic par un juriste : ils peuvent modifier la classification.","");
+
+  // Interdit
+  if(r.prohib.length){
+    add("now","Suspendre la mise sur le marché, la mise en service ou l’utilisation de la fonctionnalité concernée","Les pratiques interdites s’appliquent depuis le 2 février 2025. Informez la direction et le délégué à la protection des données.","Art. 5");
+    add("now","Faire réaliser une analyse juridique approfondie","Vérifiez les conditions exactes de l’interdiction et les exceptions éventuelles (raisons médicales ou de sécurité pour le point f ; régime d’autorisation des paragraphes 2 à 7 pour le point h), à la lumière des lignes directrices de la Commission sur les pratiques interdites.","Art. 5");
+    if(r.prohib.indexOf("p_i")>-1) add("now","Mettre en place des garde-fous techniques contre la génération de contenus interdits","Filtrage des requêtes et des sorties, conditions d’utilisation, modération. Échéance : 2 décembre 2026.","Art. 5 (règl. 2026/1744)");
+    add("short","Reconfigurer ou retirer le système, et documenter la décision","Conservez la trace de l’analyse et des mesures prises pour pouvoir en justifier auprès de l’autorité de surveillance du marché.","Art. 5 et 99");
+  }
+
+  // Haut risque
+  if(r.hr){
+    var dl=hrDate(r);
+    if(isProv(r)){
+      if(r.roles.indexOf("fournisseur25")>-1) add("now","Assumer les obligations du fournisseur","Vous êtes considéré comme fournisseur du système à haut risque ; le fournisseur initial n’est plus tenu comme tel pour ce système mais doit coopérer avec vous.","Art. 25");
+      add("now","Réaliser une analyse d’écart au regard des exigences applicables","Comparez l’existant aux exigences : gestion des risques, données, documentation, journalisation, transparence, contrôle humain, exactitude, robustesse et cybersécurité. Échéance d’application : "+dl+".","Art. 8 à 15");
+      if(A.q_terr==="horsue") add("now","Désigner un mandataire établi dans l’Union","Mandat écrit préalable à la mise à disposition du système sur le marché de l’Union.","Art. 22");
+      add("short","Suivre l’élaboration des normes harmonisées","Leur respect vaudra présomption de conformité. Les travaux sont menés par le CEN et le CENELEC.","Art. 40");
+      add("due","Mettre en place le système de gestion des risques et la gouvernance des données","Processus itératif couvrant tout le cycle de vie ; jeux de données pertinents, suffisamment représentatifs et, dans toute la mesure du possible, exempts d’erreurs ; examen des biais possibles.","Art. 9 et 10");
+      add("due","Constituer la documentation technique et organiser la journalisation","Documentation conforme à l’annexe IV (forme simplifiée possible pour les PME et petites entreprises à moyenne capitalisation) ; enregistrement automatique des événements ; conservation des documents pendant dix ans.","Art. 11, 12 et 18");
+      add("due","Organiser la transparence envers les déployeurs et le contrôle humain","Notice d’utilisation claire et complète ; mesures permettant une supervision humaine effective, y compris la capacité d’ignorer, d’annuler ou d’interrompre le système.","Art. 13 et 14");
+      add("due","Garantir l’exactitude, la robustesse et la cybersécurité","Niveaux d’exactitude déclarés dans la notice, résilience face aux erreurs et aux tentatives d’altération.","Art. 15");
+      add("due","Déployer un système de gestion de la qualité","Politiques, procédures et instructions écrites, proportionnées à la taille de l’organisation.","Art. 17");
+      add("due","Conduire l’évaluation de la conformité, établir la déclaration UE de conformité et apposer le marquage CE",
+        r.annexI?"Suivez la procédure prévue par la législation sectorielle de l’annexe I, en y intégrant les exigences du règlement.":"Pour l’annexe III, procédure de contrôle interne (annexe VI), sauf pour la biométrie (point 1) où l’intervention d’un organisme notifié peut être requise (annexe VII).",
+        "Art. 43, 47 et 48");
+      if(r.a3HR) add("due","Enregistrer le système dans la base de données de l’Union","Avant la mise sur le marché ou la mise en service.","Art. 49§1");
+      add("due","Organiser la surveillance après commercialisation et le signalement des incidents graves","Plan de surveillance, mesures correctives, coopération avec les autorités.","Art. 20, 72 et 73");
+    }
+    if(isDep(r)){
+      add("now","Obtenir du fournisseur la notice d’utilisation et des garanties contractuelles de conformité","Prévoyez l’accès à la documentation utile, la coopération en cas d’incident et la répartition des responsabilités.","Art. 13 et 26§1");
+      add("short","Réaliser ou mettre à jour l’analyse d’impact relative à la protection des données","En utilisant les informations fournies par le fournisseur en application de l’article 13.","Art. 26§9 ; art. 35 RGPD");
+      add("due","Utiliser le système conformément à la notice et organiser le contrôle humain","Confiez la supervision à des personnes disposant des compétences, de la formation, de l’autorité et du soutien nécessaires.","Art. 26§1 et 26§2");
+      add("due","Maîtriser les données d’entrée et surveiller le fonctionnement","Données pertinentes et suffisamment représentatives au regard de la destination ; information du fournisseur et des autorités en cas de risque ou d’incident grave.","Art. 26§4 et 26§5");
+      add("due","Conserver les journaux générés automatiquement","Pendant au moins six mois, sauf disposition contraire du droit applicable.","Art. 26§6");
+      var emploi = r.a3.some(function(c){return c.charAt(0)==="4";});
+      add("due","Informer les représentants des travailleurs et les travailleurs concernés avant la mise en service"+(emploi?"":" (si utilisation sur le lieu de travail)"),
+        "En Belgique, à articuler avec les procédures d’information et de consultation existantes, notamment la CCT n° 39 relative à l’introduction de nouvelles technologies.","Art. 26§7");
+      if(r.a3HR) add("due","Informer les personnes faisant l’objet de décisions prises ou assistées par le système","Et organiser le traitement des demandes d’explication des décisions individuelles.","Art. 26§11 et 86");
+      var fria = r.a3.indexOf("5b")>-1 || r.a3.indexOf("5c")>-1;
+      if(r.a3HR && !(r.a3.length===1 && r.a3[0]==="2a")) add("due",
+        fria?"Réaliser une analyse d’impact sur les droits fondamentaux":"Vérifier l’obligation d’analyse d’impact sur les droits fondamentaux",
+        fria?"Obligatoire pour les déployeurs de systèmes d’évaluation de la solvabilité ou de tarification en assurance vie et maladie, avant la première utilisation ; résultats notifiés à l’autorité de surveillance du marché.":"Obligatoire si vous êtes un organisme de droit public ou une entité privée fournissant des services publics.",
+        "Art. 27");
+    }
+    if(r.roles.indexOf("importateur")>-1) add("due","Vérifier la conformité du système avant sa mise sur le marché","Évaluation de la conformité, documentation technique, marquage CE, déclaration UE, mandataire désigné ; indication de vos coordonnées ; conservation des documents pendant dix ans.","Art. 23");
+    if(r.roles.indexOf("distributeur")>-1) add("due","Vérifier le marquage CE, la déclaration UE et la notice avant toute mise à disposition","Ne mettez pas à disposition un système que vous estimez non conforme ; informez le fournisseur ou l’importateur.","Art. 24");
+    if(r.roles.indexOf("mandataire")>-1) add("due","Exécuter les tâches prévues par le mandat","Vérification de la documentation, conservation pendant dix ans, coopération avec les autorités ; résiliation du mandat si le fournisseur agit en violation du règlement.","Art. 22");
+  }
+
+  // Dérogation article 6§3
+  if(r.derog){
+    if(isProv(r)){
+      add("now","Documenter l’évaluation fondant la dérogation","Avant la mise sur le marché ou la mise en service ; à tenir à la disposition des autorités nationales compétentes sur demande.","Art. 6§4");
+      add("short","Vérifier le régime d’enregistrement applicable","Contrôlez dans la version consolidée du règlement, après le règlement (UE) 2026/1744, les formalités d’enregistrement propres aux systèmes relevant de l’article 6§3.","Art. 49§2");
+    }
+    if(isDep(r)) add("short","Obtenir la documentation du fournisseur justifiant la dérogation","Et vérifier que votre utilisation reste dans le périmètre des tâches couvertes.","Art. 6§3 et 6§4");
+    add("short","Réexaminer la dérogation à chaque évolution du système","Toute extension de fonctionnalité, tout profilage ou tout usage décisionnel remet la dérogation en cause.","Art. 6§3");
+  }
+
+  // Transparence
+  var tP=isProv(r), tD=isDep(r);
+  if(r.transp.indexOf("t1")>-1){
+    if(tP) add("now","Informer les personnes qu’elles interagissent avec un système d’IA","Au plus tard lors de la première interaction, de manière claire et reconnaissable. Applicable depuis le 2 août 2026.","Art. 50§1 et 50§5");
+    if(tD && !tP) add("now","Vérifier que l’information sur l’interaction avec une IA est effectivement délivrée","Contrôlez la configuration du système dans votre environnement de déploiement.","Art. 50§1");
+  }
+  if(r.transp.indexOf("t2")>-1){
+    if(tP) add("now","Marquer les contenus générés dans un format lisible par machine","Solutions techniques efficaces, interopérables, robustes et fiables permettant de détecter l’origine artificielle des contenus. Applicable depuis le 2 août 2026 ; au 2 décembre 2026 pour les systèmes mis sur le marché avant cette date.","Art. 50§2");
+    if(tD && !tP) add("short","Vérifier auprès du fournisseur le marquage des contenus générés","Et documenter la réponse obtenue.","Art. 50§2");
+  }
+  if(r.transp.indexOf("t3")>-1 && tD) add("now","Informer les personnes exposées au système de reconnaissance des émotions ou de catégorisation biométrique","Et traiter les données personnelles conformément au RGPD.","Art. 50§3");
+  if(r.transp.indexOf("t4")>-1 && tD) add("now","Indiquer que les contenus constituent des hypertrucages","Mention claire et reconnaissable ; mention adaptée pour les œuvres artistiques, satiriques ou fictionnelles.","Art. 50§4");
+  if(r.transp.indexOf("t5")>-1 && tD) add("now","Indiquer que les textes publiés ont été générés ou manipulés par une IA","Sauf contrôle humain ou éditorial avec responsabilité éditoriale assumée.","Art. 50§4");
+
+  // Modèles d'IA à usage général
+  if(gIsProv()){
+    var h = A.g_avant==="oui"?"due":"now";
+    var libre = A.g_libre==="oui" && A.g_sys!=="oui";
+    var modNote = A.g_type==="modifie"?" En cas de modification d’un modèle tiers, vos obligations peuvent être limitées à la modification (lignes directrices de la Commission sur les modèles d’IA à usage général).":"";
+    if(!libre){
+      add(h,"Établir et tenir à jour la documentation technique du modèle","Contenu défini à l’annexe XI, à communiquer sur demande à l’AI Office et aux autorités nationales."+modNote,"Art. 53§1 a)");
+      add(h,"Fournir la documentation aux fournisseurs en aval","Informations de l’annexe XII permettant d’intégrer le modèle et de respecter leurs propres obligations.","Art. 53§1 b)");
+    }
+    add(h,"Adopter une politique de respect du droit d’auteur","Y compris l’identification et le respect des réservations de droits exprimées en application de l’article 4§3 de la directive (UE) 2019/790."+(libre?" Cette obligation s’applique même aux modèles sous licence libre.":""),"Art. 53§1 c)");
+    add(h,"Publier un résumé suffisamment détaillé du contenu utilisé pour l’entraînement","Selon le modèle mis à disposition par l’AI Office.","Art. 53§1 d)");
+    add("short","Envisager l’adhésion au code de bonnes pratiques pour l’IA à usage général","Moyen de démontrer la conformité aux articles 53 et 55 dans l’attente de normes harmonisées.","Art. 56");
+    if(A.q_terr==="horsue") add("now","Désigner un mandataire établi dans l’Union pour le modèle","Préalablement à la mise sur le marché de l’Union.","Art. 54");
+    if(A.g_sys==="oui"){
+      add("now","Notifier la Commission","Dans les deux semaines suivant le franchissement du seuil ou le moment où il est su qu’il sera franchi.","Art. 52§1");
+      add(h,"Évaluer et atténuer les risques systémiques","Évaluation du modèle, y compris par des essais contradictoires ; atténuation des risques ; signalement des incidents graves à l’AI Office ; cybersécurité adéquate du modèle et de son infrastructure.","Art. 55");
+    }
+  }
+  if(A.g_type==="integre"){
+    add("now","Obtenir la documentation du fournisseur du modèle","Informations de l’annexe XII : capacités, limites, conditions d’intégration.","Art. 53§1 b)");
+    add("short","Vérifier les conditions d’utilisation du modèle","Politique d’utilisation acceptable, garanties contractuelles, localisation et traitement des données.","");
+    add("short","Intégrer le modèle dans votre propre analyse de conformité","L’intégration d’un modèle tiers ne transfère pas les obligations attachées à votre système : si celui-ci est à haut risque, vous en restez le fournisseur.","Art. 25§4");
+  }
+
+  // Socle commun
+  add("short","Prendre des mesures de maîtrise de l’IA","Depuis le règlement (UE) 2026/1744, il s’agit de prendre des mesures pour soutenir un niveau suffisant de maîtrise de l’IA du personnel et des personnes agissant pour votre compte. Conservez la trace des mesures prises.","Art. 4");
+  if(!(r.hr && isDep(r))) add("short","Articuler la démarche avec le RGPD","Base légale, information des personnes, analyse d’impact si le traitement présente un risque élevé.","RGPD");
+  if(r.tier==="minimal") add("short","Envisager l’adhésion à un code de conduite volontaire","Application volontaire de certaines exigences prévues pour les systèmes à haut risque.","Art. 95");
+  add("short","Fixer une revue périodique de la classification","Toute évolution de la destination, des fonctionnalités ou du contexte de déploiement peut modifier la qualification.","");
+  return L;
+}
+
+var DEADLINES = [
+ ["2 février 2025","Pratiques interdites (art. 5) et maîtrise de l’IA (art. 4)",function(r){return r.tier==="interdit";}],
+ ["2 août 2025","Obligations des fournisseurs de modèles d’IA à usage général (chapitre V) et régime des sanctions",function(){return gIsProv()&&A.g_avant!=="oui";}],
+ ["2 août 2026","Transparence (art. 50) et application générale du règlement",function(r){return r.transp.length>0;}],
+ ["2 décembre 2026","Nouvelles interdictions du règlement (UE) 2026/1744 ; marquage de l’article 50§2 pour les systèmes mis sur le marché avant le 2 août 2026",function(r){return r.prohib.indexOf("p_i")>-1||r.transp.indexOf("t2")>-1;}],
+ ["2 août 2027","Mise en conformité des modèles d’IA à usage général mis sur le marché avant le 2 août 2025",function(){return gIsProv()&&A.g_avant==="oui";}],
+ ["2 décembre 2027","Systèmes à haut risque de l’annexe III (chapitre III)",function(r){return r.a3HR;}],
+ ["2 août 2028","Systèmes à haut risque relevant de l’annexe I (chapitre III)",function(r){return r.annexI;}]
+];
+
+var VERDICT = {
+ interdit:{h:"Pratique interdite",p:"Le système relève d’au moins une pratique interdite par l’article 5. Sa mise sur le marché, sa mise en service et son utilisation sont prohibées, sous réserve d’exceptions strictement encadrées."},
+ haut:{h:"Système à haut risque",p:""},
+ limite:{h:"Risque limité : obligations de transparence",p:"Le système n’est ni interdit ni à haut risque, mais il est soumis aux obligations de transparence de l’article 50, applicables depuis le 2 août 2026."},
+ minimal:{h:"Risque minimal",p:"Le règlement n’impose pas d’obligation spécifique au système, en dehors des mesures de maîtrise de l’IA (art. 4). Des codes de conduite volontaires peuvent être adoptés (art. 95)."},
+ hors:{h:"Hors du champ d’application",p:"Au vu de vos réponses, le règlement sur l’intelligence artificielle ne paraît pas applicable à ce système. Cette conclusion doit être documentée et réexaminée en cas d’évolution."}
+};
+
+function answerText(b){
+  var v=A[b.id];
+  if(b.type==="text") return String(v||"").trim()||"(non renseigné)";
+  if(b.type==="radio"){ var o=b.opts.filter(function(x){return x[0]===v;})[0]; return o?o[1]:"(sans réponse)"; }
+  if(b.type==="check"){ return (v||[]).map(function(x){var it=b.items.filter(function(i){return i[0]===x;})[0];return it?it[1]:x;}).join(" ; ")||"(aucune case cochée)"; }
+  return "";
+}
+
+function recapHTML(){
+  var h='<details class="recap"><summary>Récapitulatif de vos réponses</summary>';
+  h+='<h4>Description</h4><dl><dt>Description et finalité</dt><dd>'+esc(String(A.sys_desc||"").trim()||"(non renseignée)")+'</dd></dl>';
+  var stop = outOfScope()?1:8;
+  for(var i=1;i<=stop;i++){
+    if(!applies(i)) continue;
+    var s=STEPS[i], rows="";
+    s.blocks.forEach(function(b){
+      if(b.type==="note"||!vis(b)) return;
+      if(b.type==="check" && /^a3_/.test(b.id) && !(A[b.id]||[]).length) return;
+      rows+='<dt>'+esc(b.ref?b.ref+" : ":"")+esc(b.label)+'</dt><dd>'+esc(answerText(b))+'</dd>';
+    });
+    h+='<h4>'+esc(s.title)+'</h4><dl>'+rows+'</dl>';
+  }
+  return h+'</details>';
+}
+
+var HZL={now:"Immédiatement",short:"Dans les trois mois",due:"Avant l’échéance applicable"};
+function dueDate(r){return r.hr?(r.a3HR?"2 décembre 2027":"2 août 2028"):(A.g_avant==="oui"?"2 août 2027":"");}
+function orderedPlan(r){
+  var o={now:0,short:1,due:2};
+  return buildPlan(r).map(function(a,i){a.i=i;return a;}).sort(function(a,b){return (o[a.h]-o[b.h])||(a.i-b.i);});
+}
+function todayFR(){return new Date().toLocaleDateString("fr-BE",{day:"numeric",month:"long",year:"numeric"});}
+function classLine(r){return TL[r.tier]+" · indice de risque "+r.score+"/100";}
+
+/* Pyramide complète, avec la pointe */
+function pyramidSVG(r){
+  var W=420,H=326,cx=W/2;
+  function hw(y){return (W/2)*y/H;}
+  var T=[["interdit","Interdit",0,110],["haut","Haut risque",116,182],["limite","Risque limité",188,254],["minimal","Risque minimal",260,326]];
+  var g=T.map(function(x){
+    var on=r.tier===x[0], y0=x[2], y1=x[3], pts;
+    if(y0===0) pts=cx+",0 "+(cx+hw(y1))+","+y1+" "+(cx-hw(y1))+","+y1;
+    else pts=(cx-hw(y0))+","+y0+" "+(cx+hw(y0))+","+y0+" "+(cx+hw(y1))+","+y1+" "+(cx-hw(y1))+","+y1;
+    var fill=on?(x[0]==="interdit"?"#8E2B2B":"#13294B"):"#E7EDF3";
+    var ty=y0===0?94:(y0+y1)/2+5;
+    return '<polygon points="'+pts+'" fill="'+fill+'"/><text x="'+cx+'" y="'+ty+'" text-anchor="middle" font-family="Public Sans,system-ui,sans-serif" font-size="'+(y0===0?14:15)+'" font-weight="600" fill="'+(on?"#ffffff":"#5B6573")+'">'+x[1]+'</text>';
+  }).join("");
+  return '<svg class="pyr-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Pyramide des risques : '+esc(TL[r.tier])+'">'+g+'</svg>';
+}
+
+/* Jauge de l'indice de risque (0 à 100) */
+function gaugeSVG(score){
+  var cx=120,cy=118,R=92,sw=18;
+  function pt(v,rad){var a=Math.PI-(v/100)*Math.PI;return [cx+rad*Math.cos(a),cy-rad*Math.sin(a)];}
+  function arc(v1,v2,col){var p1=pt(v1,R),p2=pt(v2,R);return '<path d="M'+p1[0].toFixed(2)+' '+p1[1].toFixed(2)+' A'+R+' '+R+' 0 0 1 '+p2[0].toFixed(2)+' '+p2[1].toFixed(2)+'" stroke="'+col+'" stroke-width="'+sw+'" fill="none"/>';}
+  var bands=[[0,5,"#EEF2F6"],[5,30,"#C9D6E3"],[30,60,"#8FAAC4"],[60,90,"#3B6E99"],[90,100,"#8E2B2B"]];
+  var b=bands.map(function(x,i){return arc(x[0]+(i?0.6:0),x[1]-(i<4?0.6:0),x[2]);}).join("");
+  var n=pt(score,R-26);
+  var ticks=[0,5,30,60,90,100].map(function(v){var a=pt(v,R+sw/2+2),c=pt(v,R-sw/2-2);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+c[0].toFixed(1)+'" y2="'+c[1].toFixed(1)+'" stroke="#ffffff" stroke-width="2"/>';}).join("");
+  return '<svg class="gauge-svg" viewBox="0 0 240 172" role="img" aria-label="Indice de risque : '+score+' sur 100">'+b+ticks+
+    '<line x1="'+cx+'" y1="'+cy+'" x2="'+n[0].toFixed(1)+'" y2="'+n[1].toFixed(1)+'" stroke="#13294B" stroke-width="3.5" stroke-linecap="round"/>'+
+    '<circle cx="'+cx+'" cy="'+cy+'" r="7" fill="#13294B"/>'+
+    '<text x="'+(cx-R)+'" y="'+(cy+22)+'" text-anchor="middle" font-family="Public Sans,system-ui,sans-serif" font-size="11" fill="#5B6573">0</text>'+
+    '<text x="'+(cx+R)+'" y="'+(cy+22)+'" text-anchor="middle" font-family="Public Sans,system-ui,sans-serif" font-size="11" fill="#5B6573">100</text>'+
+    '<text x="'+cx+'" y="'+(cy+46)+'" text-anchor="middle" font-family="Source Serif 4,Georgia,serif" font-size="28" font-weight="700" fill="#13294B">'+score+'<tspan font-size="14" font-weight="600" fill="#5B6573"> / 100</tspan></text>'+
+    '</svg>';
+}
+
+/* Contenu du plan imprimable (seul élément imprimé depuis la page de résultat) */
+function printPlanHTML(r,plan){
+  var name=String(A.sys_name||"").trim()||"Système non nommé", org=String(A.sys_org||"").trim(), desc=String(A.sys_desc||"").trim()||"Non renseignée";
+  var dd=dueDate(r);
+  return '<h1>Plan d’action</h1><p class="pp-sub">Conformité au règlement (UE) 2024/1689 sur l’intelligence artificielle</p>'+
+    '<dl class="pp-meta">'+
+    '<div><dt>Système évalué</dt><dd>'+esc(name)+(org?' ('+esc(org)+')':'')+'</dd></div>'+
+    '<div><dt>Description et finalité</dt><dd>'+esc(desc).replace(/\n/g,"<br>")+'</dd></div>'+
+    '<div><dt>Classification</dt><dd class="pp-class'+(r.tier==="interdit"?' alert':'')+'">'+esc(classLine(r))+'</dd></div>'+
+    '<div><dt>Date</dt><dd>'+todayFR()+'</dd></div></dl>'+
+    '<h2>Actions</h2><ol class="pp-list">'+plan.map(function(a){
+      var meta=[a.ref,HZL[a.h]+(a.h==="due"&&dd?" ("+dd+")":"")].filter(Boolean).join(" · ");
+      return '<li><p class="t">'+esc(a.t)+'</p><p class="d">'+esc(a.d)+'</p><p class="m">'+esc(meta)+'</p></li>';
+    }).join("")+'</ol>'+
+    '<p class="pp-disc">Plan établi automatiquement à partir des réponses saisies, à titre indicatif. Il ne constitue pas un conseil juridique : faites-le valider par un professionnel du droit avant toute décision.</p>';
+}
+
+function resultHTML(){
+  var r=compute(), v=VERDICT[r.tier], plan=orderedPlan(r);
+  var name=String(A.sys_name||"").trim()||"Système non nommé";
+  var today=todayFR();
+  var pf=document.getElementById("pfDate"); if(pf) pf.textContent=today;
+  var ppEl=document.getElementById("printPlan"); if(ppEl) ppEl.innerHTML=printPlanHTML(r,plan);
+
+  var p=v.p;
+  if(r.tier==="haut"){
+    var bases=[]; if(r.annexI) bases.push("l’annexe I (art. 6§1)"); if(r.a3HR) bases.push("l’annexe III, point(s) "+r.a3.map(function(c){return c.charAt(0)+" "+c.slice(1)+")";}).join(", ")+" (art. 6§2)");
+    p="Le système relève de "+bases.join(" et de ")+". Les obligations du chapitre III s’appliquent à compter du "+(r.a3HR&&r.annexI?"2 décembre 2027 (annexe III) et du 2 août 2028 (annexe I)":hrDate(r))+", "+(r.a3HR&&r.annexI?"dates fixées":"date fixée")+" par le règlement (UE) 2026/1744.";
+    if(r.transp.length) p+=" Les obligations de transparence de l’article 50 s’appliquent en outre dès à présent.";
+  }
+  if(r.tier==="interdit" && r.hr) p+=" Le système relèverait par ailleurs du haut risque.";
+  if(r.derog && r.tier!=="haut") p+=" Un usage visé à l’annexe III a été identifié, mais la dérogation de l’article 6§3 paraît applicable.";
+
+  var h='<div class="stephead" style="padding-bottom:0"><p class="count">Diagnostic établi le '+today+'</p><h1>'+esc(name)+'</h1>'+(String(A.sys_org||"").trim()?'<p class="src">'+esc(A.sys_org)+'</p>':'')+'</div>';
+
+  h+='<section class="verdict"><p class="kick">Classification</p><h2'+(r.tier==="interdit"?' class="alert"':'')+'>'+v.h+'</h2><p class="vp">'+p+'</p>'+
+     (r.unc.length?'<span class="prov">Classification provisoire : '+r.unc.length+' point(s) à confirmer</span>':'')+
+     (r.potential?'<p class="potential">Niveau potentiel si les points incertains se confirment : '+TL[r.potential]+'</p>':'')+
+     '<div class="vis"><figure>'+pyramidSVG(r)+'<figcaption>'+(r.tier==="hors"?'<span class="oos">Hors champ</span>':'Les quatre niveaux de risque du règlement')+'</figcaption></figure>'+
+     '<figure>'+gaugeSVG(r.score)+'<figcaption>Indice de risque : 0 (aucun) à 100 (le plus élevé)</figcaption></figure></div>'+
+     '<details class="calc"><summary>Détail du calcul de l’indice</summary><table>'+
+       r.scoreDetail.map(function(x){return '<tr><td>'+esc(x[0])+'</td><td>+'+x[1]+'</td></tr>';}).join("")+
+       '<tr><td><strong>Indice retenu</strong>'+(r.scoreRaw>r.band[1]?' (plafonné à '+r.band[1]+')':'')+'</td><td>'+r.score+'</td></tr></table>'+
+       '<p>Fourchettes : hors champ 0–4, minimal 5–29, limité 30–59, haut risque 60–89, interdit 90–100. Les majorations ne font jamais sortir l’indice de la fourchette du niveau retenu. Cet indice sert à prioriser ; il n’a pas de valeur juridique.</p></details>'+
+     '</section>';
+
+  h+='<section class="sec"><h2>Motifs de la classification</h2><ul class="reasons">'+r.reasons.map(function(x){return '<li><span class="r">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></li>';}).join("")+'</ul></section>';
+
+  if(r.unc.length) h+='<section class="sec"><h2>Points à confirmer</h2><p class="sub">Vous avez répondu « Incertain » à ces questions. La classification repose sur vos seules réponses affirmatives, sauf pour la dérogation de l’article 6§3, écartée par prudence. Faites analyser ces points avant toute décision : ils peuvent relever le niveau de risque.</p><ul class="reasons">'+r.unc.map(function(x){return '<li><span class="r">'+esc(x[0])+'</span><span>'+esc(x[1])+'</span></li>';}).join("")+'</ul></section>';
+
+  if(r.tier!=="hors"){
+    var rl=r.roles.map(function(x){return x==="fournisseur25"?"Fournisseur (par requalification, art. 25)":ROLE_LABEL[x];});
+    var gl={fournit:"Fournisseur de modèle d’IA à usage général",modifie:"Fournisseur de modèle d’IA à usage général (modification)",integre:"Fournisseur en aval intégrant un modèle tiers"}[A.g_type];
+    if(gl) rl.push(gl+(A.g_sys==="oui"&&gIsProv()?", risque systémique":""));
+    h+='<section class="sec"><h2>Votre rôle</h2>'+(rl.length?'<div class="roles" style="justify-content:center">'+rl.map(function(x){return '<span>'+esc(x)+'</span>';}).join("")+'</div>':'<p class="sub">Aucun rôle indiqué : le plan d’action couvre, par prudence, les obligations du fournisseur et du déployeur.</p>')+'</section>';
+  }
+
+  var dd=dueDate(r), n=0;
+  h+='<section class="sec"><h2>Plan d’action</h2><p class="sub">Actions déduites de vos réponses, numérotées et classées par horizon.</p>';
+  ["now","short","due"].forEach(function(z){
+    var items=plan.filter(function(a){return a.h===z;}); if(!items.length) return;
+    h+='<div class="hz"><h3>'+HZL[z]+(z==="due"&&dd?'<span>Échéance : '+dd+'</span>':'')+'</h3>'+items.map(function(a){
+      n++; var id="act_"+n;
+      return '<div class="act"><input type="checkbox" id="'+id+'" aria-label="Action '+n+' réalisée"><label for="'+id+'"><div class="at"><span class="num">'+n+'.</span>'+esc(a.t)+'</div><div class="ad">'+esc(a.d)+'</div></label><div class="ar">'+esc(a.ref)+'</div></div>';
+    }).join("")+'</div>';
+  });
+  h+='</section>';
+
+  if(r.tier!=="hors"){
+    h+='<section class="sec"><h2>Échéances clés</h2><div class="tblwrap"><table class="dl"><thead><tr><th>Date</th><th>Obligations applicables</th></tr></thead><tbody>'+
+      DEADLINES.map(function(d){return '<tr'+(d[2](r)?' class="rel"':'')+'><td>'+d[0]+'</td><td>'+d[1]+'</td></tr>';}).join("")+'</tbody></table></div></section>';
+    h+='<section class="sec"><h2>Sanctions encourues</h2><ul class="reasons">'+
+      '<li><span class="r">Art. 99§3</span><span>Pratiques interdites : jusqu’à 35 millions d’euros ou 7 % du chiffre d’affaires annuel mondial, le montant le plus élevé étant retenu.</span></li>'+
+      '<li><span class="r">Art. 99§4</span><span>Autres obligations des opérateurs, dont la transparence : jusqu’à 15 millions d’euros ou 3 %.</span></li>'+
+      '<li><span class="r">Art. 99§5</span><span>Informations inexactes, incomplètes ou trompeuses fournies aux autorités : jusqu’à 7,5 millions d’euros ou 1 %.</span></li>'+
+      (gIsProv()?'<li><span class="r">Art. 101</span><span>Fournisseurs de modèles d’IA à usage général : jusqu’à 15 millions d’euros ou 3 %, prononcées par la Commission.</span></li>':'')+
+      '<li><span class="r">Art. 99§6</span><span>Pour les PME, y compris les jeunes pousses, le montant le moins élevé est retenu ; le règlement (UE) 2026/1744 étend certains allègements aux petites entreprises à moyenne capitalisation.</span></li></ul></section>';
+  }
+
+  h+='<section class="sec">'+recapHTML()+'</section>';
+  h+='<div class="note warn" style="margin:28px auto 0"><p><strong>Ceci n’est pas un conseil juridique.</strong> Ce diagnostic est établi automatiquement à partir de vos seules réponses, à titre informatif. Il ne tient pas compte de l’ensemble des circonstances de votre situation, des actes délégués et d’exécution, ni des lignes directrices publiées après septembre 2026. Faites-le valider par un avocat ou un conseiller spécialisé en droit de l’intelligence artificielle avant toute décision.</p></div>';
+
+  var inFrame=false; try{inFrame=window.self!==window.top;}catch(e){inFrame=true;}
+  h+='<div class="nav no-print" style="justify-content:center"><div class="right" style="margin:0;justify-content:center">'+
+     '<button class="btn btn-primary" data-act="print">Imprimer le plan d’action (PDF)</button>'+
+     '<button class="btn btn-primary" data-act="pdf">Télécharger le plan d’action (PDF)</button></div></div>'+
+     '<div class="nav no-print" style="justify-content:center;margin-top:10px"><div class="right" style="margin:0;justify-content:center">'+
+     '<button class="btn btn-ghost" data-act="edit">Modifier mes réponses</button>'+
+     (inFrame?'<button class="btn btn-ghost" data-act="newtab">Ouvrir dans un nouvel onglet</button>':'')+
+     (CONTACT_URL?'<a class="btn btn-ghost" href="'+esc(CONTACT_URL)+'" target="_blank" rel="noopener">'+esc(CONTACT_LABEL)+'</a>':'')+
+     '<button class="btn btn-ghost" data-act="restart">Nouveau diagnostic</button></div></div>'+
+     '<div class="confirm no-print" id="restartBox" hidden><p>Effacer toutes vos réponses et revenir à la première page ?</p>'+
+     '<button class="btn btn-primary" data-act="restart-yes">Oui, nouveau diagnostic</button><button class="btn btn-ghost" data-act="restart-no">Annuler</button></div>';
+  return h;
+}
+
+/* Téléchargement direct d'un PDF A4 (jsPDF) */
+function pdfText(s){
+  return String(s==null?"":s).replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/œ/g,"oe").replace(/Œ/g,"OE")
+    .replace(/…/g,"...").replace(/[–—]/g,"-").replace(/[\u00a0\u202f]/g," ").replace(/²⁵/g,"^25").replace(/[^\x00-\xFF]/g,"");
+}
+function downloadPDF(){
+  var J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J){ alert("Le module PDF n’a pas pu être chargé. Utilisez « Imprimer le plan d’action (PDF) » puis choisissez « Enregistrer au format PDF »."); return; }
+  var r=compute(), plan=orderedPlan(r), dd=dueDate(r);
+  var doc=new J({unit:"mm",format:"a4"}), W=210, H=297, M=18, CW=W-2*M, TOP=33, BOTTOM=H-26, y=TOP;
+  var NAVY=[19,41,75], INK=[42,51,64], GRAY=[91,101,115], STEEL=[59,110,153], ALERT=[142,43,43], LINE=[214,222,231];
+  function col(c){doc.setTextColor(c[0],c[1],c[2]);}
+  function font(st,sz){doc.setFont("helvetica",st);doc.setFontSize(sz);}
+  function lines(s,w){return doc.splitTextToSize(pdfText(s),w);}
+  function lh(sz){return sz*0.42;}
+  function need(h){ if(y+h>BOTTOM){ doc.addPage(); y=TOP; } }
+  function rule(){ doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(0.25); doc.line(M,y,W-M,y); }
+
+  font("bold",17); col(NAVY); doc.text("Plan d'action",W/2,y+2,{align:"center"}); y+=8;
+  font("normal",9.5); col(GRAY); doc.text(pdfText("Conformité au règlement (UE) 2024/1689 sur l'intelligence artificielle"),W/2,y,{align:"center"}); y+=8;
+
+  var name=String(A.sys_name||"").trim()||"Système non nommé", org=String(A.sys_org||"").trim(), desc=String(A.sys_desc||"").trim()||"Non renseignée";
+  var meta=[["SYSTÈME ÉVALUÉ",name+(org?" ("+org+")":""),"normal",10.5,INK],["DESCRIPTION ET FINALITÉ",desc,"normal",10,INK],["CLASSIFICATION",classLine(r),"bold",11,r.tier==="interdit"?ALERT:NAVY],["DATE",todayFR(),"normal",10,INK]];
+  rule(); y+=1;
+  meta.forEach(function(m){
+    var L=lines(m[1],CW-44); font(m[2],m[3]); var h=Math.max(L.length*lh(m[3])+3.5,8);
+    need(h+1);
+    font("bold",7.5); col(STEEL); doc.text(pdfText(m[0]),M,y+4.2);
+    font(m[2],m[3]); col(m[4]); doc.text(L,M+44,y+4.4,{lineHeightFactor:1.2});
+    y+=h; rule(); y+=0.8;
+  });
+  y+=6;
+  font("bold",12.5); col(NAVY); need(12); doc.text("Actions",W/2,y,{align:"center"}); y+=5;
+
+  plan.forEach(function(a,i){
+    var X=M+9, w=CW-9;
+    font("bold",10.5); var Lt=lines(a.t,w);
+    font("normal",9.5); var Ld=lines(a.d,w);
+    var mt=[a.ref,HZL[a.h]+(a.h==="due"&&dd?" ("+dd+")":"")].filter(Boolean).join(" · ");
+    font("bold",8.2); var Lm=lines(mt,w);
+    var h=Lt.length*lh(10.5)*1.15+Ld.length*lh(9.5)*1.2+Lm.length*lh(8.2)*1.2+6;
+    need(h);
+    y+=3.6;
+    font("bold",10.5); col(NAVY); doc.text(String(i+1)+".",M,y); doc.text(Lt,X,y,{lineHeightFactor:1.15}); y+=Lt.length*lh(10.5)*1.15+0.6;
+    font("normal",9.5); col(INK); doc.text(Ld,X,y,{lineHeightFactor:1.2}); y+=Ld.length*lh(9.5)*1.2+0.4;
+    font("bold",8.2); col(STEEL); doc.text(Lm,X,y,{lineHeightFactor:1.2}); y+=Lm.length*lh(8.2)*1.2-1.2;
+    y+=1.8; rule();
+  });
+  y+=6;
+  font("italic",8.5); col(GRAY);
+  var Ldisc=lines("Plan établi automatiquement à partir des réponses saisies, à titre indicatif. Il ne constitue pas un conseil juridique : faites-le valider par un professionnel du droit avant toute décision.",CW);
+  need(Ldisc.length*lh(8.5)*1.2+2); doc.text(Ldisc,M,y,{lineHeightFactor:1.2});
+
+  // En-tête (logo) et pied de page (copyright) sur chaque page
+  var logo=document.querySelector(".topbar img"), logoSrc=logo?logo.src:null, N=doc.getNumberOfPages(), yr=new Date().getFullYear();
+  var copy=lines("© "+yr+" Lexia. Tous droits réservés. Toute reproduction, représentation, adaptation ou diffusion, totale ou partielle, sans autorisation écrite préalable de Lexia est interdite. Diagnostic indicatif : il ne constitue pas un conseil juridique.",CW-22);
+  for(var pg=1;pg<=N;pg++){
+    doc.setPage(pg);
+    if(logoSrc){ try{ doc.addImage(logoSrc,"PNG",M,10,10,10); }catch(e){} }
+    font("bold",10); col(NAVY); doc.text("Lexia",M+13,14.3);
+    font("normal",8); col(GRAY); doc.text(pdfText("Plan d'action · Règlement (UE) 2024/1689"),M+13,18.6);
+    doc.text(pdfText(todayFR()),W-M,14.3,{align:"right"});
+    doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(0.3); doc.line(M,23,W-M,23);
+    doc.line(M,H-19,W-M,H-19);
+    font("normal",7); col(GRAY); doc.text(copy,M,H-15,{lineHeightFactor:1.25});
+    doc.text("Page "+pg+" / "+N,W-M,H-15,{align:"right"});
+  }
+  var slug=pdfText(name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"systeme";
+  doc.save("plan-action-ia-"+slug+".pdf");
+}
+
+/* ---------- Démarrage ---------- */
+document.querySelectorAll(".yr").forEach(function(e){e.textContent=new Date().getFullYear();});
+load();
+if(cur<0||cur>=STEPS.length) cur=0;
+if(cur>0 && !(A.ack||[]).length) { cur=0; hist=[]; }
+render();
+})();
+</script>
+</body>
+</html>
